@@ -29,6 +29,7 @@ class ParseBackend(str, Enum):
 
     SLM = "slm"
     SPACY = "spacy"
+    GEMINI = "gemini"
 
 
 import os

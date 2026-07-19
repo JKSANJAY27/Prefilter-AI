@@ -55,6 +55,7 @@ class ParseResult:
     raw_output: str
     model_format: str
     _extra: dict = field(default_factory=dict, repr=False)
+    _ir: Any = field(default=None, repr=False)
 
     # ------------------------------------------------------------------
     # Serialisation helpers
@@ -80,194 +81,35 @@ class ParseResult:
     # Query translators
     # ------------------------------------------------------------------
 
-    def to_sql(self, table_name: str = "listings") -> tuple[str, dict[str, Any]]:
-        """
-        Convert the fields into a SQL WHERE clause and parameter dictionary.
+    def _get_or_create_ir(self) -> Any:
+        from prefilter_ai.ir import IntermediateRepresentation
+        if self._ir is not None:
+            return self._ir
 
-        Example
-        -------
-        >>> query, params = result.to_sql()
-        >>> query
-        "SELECT * FROM listings WHERE brand = :brand AND price < :price"
-        """
-        clauses = []
-        params = {}
-        param_counter = 0
-
-        for field_name, value in self.fields.items():
-            if field_name == "domain":
+        # Reconstruct IR from self.fields for legacy compatibility
+        domain = self.fields.get("domain", "general")
+        ir = IntermediateRepresentation(domain=domain, intent="search")
+        for k, v in self.fields.items():
+            if k == "domain":
                 continue
+            if isinstance(v, list):
+                for item in v:
+                    op, val, val_hi = self._split_legacy_operator(item)
+                    ir.add_filter(k, op, val, val_hi)
+            else:
+                op, val, val_hi = self._split_legacy_operator(v)
+                ir.add_filter(k, op, val, val_hi)
+        self._ir = ir
+        return ir
 
-            if isinstance(value, list):
-                for val in value:
-                    op_data = self._parse_operator_val(val)
-                    op = op_data["op"]
-                    if op == "ne":
-                        param_key = f"{field_name}_ne_{param_counter}"
-                        param_counter += 1
-                        clauses.append(f"{field_name} != :{param_key}")
-                        params[param_key] = op_data["val"]
-                continue
-
-            op_data = self._parse_operator_val(value)
-            op = op_data["op"]
-
-            if op == "eq":
-                param_key = f"{field_name}_{param_counter}"
-                param_counter += 1
-                clauses.append(f"{field_name} = :{param_key}")
-                params[param_key] = op_data["val"]
-            elif op == "ne":
-                param_key = f"{field_name}_{param_counter}"
-                param_counter += 1
-                clauses.append(f"{field_name} != :{param_key}")
-                params[param_key] = op_data["val"]
-            elif op == "lt":
-                param_key = f"{field_name}_{param_counter}"
-                param_counter += 1
-                clauses.append(f"{field_name} < :{param_key}")
-                params[param_key] = op_data["val"]
-            elif op == "lte":
-                param_key = f"{field_name}_{param_counter}"
-                param_counter += 1
-                clauses.append(f"{field_name} <= :{param_key}")
-                params[param_key] = op_data["val"]
-            elif op == "gt":
-                param_key = f"{field_name}_{param_counter}"
-                param_counter += 1
-                clauses.append(f"{field_name} > :{param_key}")
-                params[param_key] = op_data["val"]
-            elif op == "gte":
-                param_key = f"{field_name}_{param_counter}"
-                param_counter += 1
-                clauses.append(f"{field_name} >= :{param_key}")
-                params[param_key] = op_data["val"]
-            elif op == "approx":
-                param_low = f"{field_name}_low_{param_counter}"
-                param_high = f"{field_name}_high_{param_counter}"
-                param_counter += 1
-                clauses.append(f"{field_name} BETWEEN :{param_low} AND :{param_high}")
-                val = op_data["val"]
-                if isinstance(val, (int, float)):
-                    params[param_low] = val * 0.85
-                    params[param_high] = val * 1.15
-                else:
-                    params[param_low] = val
-                    params[param_high] = val
-            elif op == "between":
-                param_low = f"{field_name}_low_{param_counter}"
-                param_high = f"{field_name}_high_{param_counter}"
-                param_counter += 1
-                clauses.append(f"{field_name} BETWEEN :{param_low} AND :{param_high}")
-                params[param_low] = op_data["val"]
-                params[param_high] = op_data["val_hi"]
-
-        where_clause = " AND ".join(clauses)
-        sql = f"SELECT * FROM {table_name}"
-        if where_clause:
-            sql += f" WHERE {where_clause}"
-        return sql, params
-
-    def to_mongodb(self) -> dict[str, Any]:
-        """Convert the fields into a MongoDB filter dictionary."""
-        mongo_filter = {}
-        for field_name, value in self.fields.items():
-            if field_name == "domain":
-                continue
-
-            if isinstance(value, list):
-                ne_vals = []
-                for val in value:
-                    op_data = self._parse_operator_val(val)
-                    if op_data["op"] == "ne":
-                        ne_vals.append(op_data["val"])
-                if ne_vals:
-                    if len(ne_vals) == 1:
-                        mongo_filter[field_name] = {"$ne": ne_vals[0]}
-                    else:
-                        mongo_filter[field_name] = {"$nin": ne_vals}
-                continue
-
-            op_data = self._parse_operator_val(value)
-            op = op_data["op"]
-            val = op_data["val"]
-
-            if op == "eq":
-                mongo_filter[field_name] = val
-            elif op == "ne":
-                mongo_filter[field_name] = {"$ne": val}
-            elif op == "lt":
-                mongo_filter[field_name] = {"$lt": val}
-            elif op == "lte":
-                mongo_filter[field_name] = {"$lte": val}
-            elif op == "gt":
-                mongo_filter[field_name] = {"$gt": val}
-            elif op == "gte":
-                mongo_filter[field_name] = {"$gte": val}
-            elif op == "approx":
-                if isinstance(val, (int, float)):
-                    mongo_filter[field_name] = {"$gte": val * 0.85, "$lte": val * 1.15}
-                else:
-                    mongo_filter[field_name] = val
-            elif op == "between":
-                mongo_filter[field_name] = {"$gte": val, "$lte": op_data["val_hi"]}
-
-        return mongo_filter
-
-    def to_chromadb(self) -> dict[str, Any]:
-        """Convert the fields into a ChromaDB where query dictionary."""
-        clauses = []
-        for field_name, value in self.fields.items():
-            if field_name == "domain":
-                continue
-
-            if isinstance(value, list):
-                for val in value:
-                    op_data = self._parse_operator_val(val)
-                    op = op_data["op"]
-                    if op == "ne":
-                        clauses.append({field_name: {"$ne": op_data["val"]}})
-                continue
-
-            op_data = self._parse_operator_val(value)
-            op = op_data["op"]
-            val = op_data["val"]
-
-            if op == "eq":
-                clauses.append({field_name: {"$eq": val}})
-            elif op == "ne":
-                clauses.append({field_name: {"$ne": val}})
-            elif op == "lt":
-                clauses.append({field_name: {"$lt": val}})
-            elif op == "lte":
-                clauses.append({field_name: {"$lte": val}})
-            elif op == "gt":
-                clauses.append({field_name: {"$gt": val}})
-            elif op == "gte":
-                clauses.append({field_name: {"$gte": val}})
-            elif op == "approx":
-                if isinstance(val, (int, float)):
-                    clauses.append({field_name: {"$gte": val * 0.85, "$lte": val * 1.15}})
-                else:
-                    clauses.append({field_name: {"$eq": val}})
-            elif op == "between":
-                clauses.append({field_name: {"$gte": val}})
-                clauses.append({field_name: {"$lte": op_data["val_hi"]}})
-
-        if not clauses:
-            return {}
-        if len(clauses) == 1:
-            return clauses[0]
-        return {"$and": clauses}
-
-    def _parse_operator_val(self, value: Any) -> dict[str, Any]:
+    def _split_legacy_operator(self, value: Any) -> tuple[str, Any, Any | None]:
         import re
         if not isinstance(value, str):
-            return {"op": "eq", "val": value}
+            return "eq", value, None
 
         m = re.match(r"^(lt|lte|gt|gte|eq|ne|approx|between):(.+)$", value)
         if not m:
-            return {"op": "eq", "val": value}
+            return "eq", value, None
 
         op, rest = m.group(1), m.group(2)
 
@@ -280,10 +122,36 @@ class ParseResult:
         if op == "between":
             parts = rest.split(":")
             if len(parts) == 2:
-                return {"op": op, "val": _num(parts[0]), "val_hi": _num(parts[1])}
-            return {"op": "eq", "val": value}
+                return op, _num(parts[0]), _num(parts[1])
+            return "eq", value, None
 
-        return {"op": op, "val": _num(rest)}
+        return op, _num(rest), None
+
+    def to_sql(self, table_name: str = "listings") -> tuple[str, dict[str, Any]]:
+        """
+        Convert the fields into a SQL WHERE clause and parameter dictionary.
+        """
+        from prefilter_ai.translators.sql import SQLTranslator
+        ir = self._get_or_create_ir()
+        return SQLTranslator(table_name=table_name).translate(ir)
+
+    def to_mongodb(self) -> dict[str, Any]:
+        """Convert the fields into a MongoDB filter dictionary."""
+        from prefilter_ai.translators.mongodb import MongoDBTranslator
+        ir = self._get_or_create_ir()
+        return MongoDBTranslator().translate(ir)
+
+    def to_chromadb(self) -> dict[str, Any]:
+        """Convert the fields into a ChromaDB where query dictionary."""
+        from prefilter_ai.translators.chromadb import ChromaDBTranslator
+        ir = self._get_or_create_ir()
+        return ChromaDBTranslator().translate(ir)
+
+    def to_elasticsearch(self) -> dict[str, Any]:
+        """Convert the fields into an Elasticsearch query DSL."""
+        from prefilter_ai.translators.elasticsearch import ElasticsearchTranslator
+        ir = self._get_or_create_ir()
+        return ElasticsearchTranslator().translate(ir)
 
     # ------------------------------------------------------------------
     # Operator helpers: let callers decode operator-prefixed numerics
