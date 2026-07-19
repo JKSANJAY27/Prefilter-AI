@@ -3,6 +3,10 @@ history.py — Stateful Session Management & Query Diff Engine for Prefilter AI.
 
 Maintains context across sequential search queries, allowing conversational
 refinements (e.g., "Only Dell" -> "cheaper" -> "actually Lenovo").
+
+Fix applied: process_query() now re-runs OntologyEngine, ConflictDetector,
+and QueryRelaxer after every merge so conversational refinements trigger
+the full intelligence layer (Gap #6 fix).
 """
 
 from __future__ import annotations
@@ -13,6 +17,10 @@ from typing import Any
 
 from prefilter_ai.ir import IntermediateRepresentation, IRFilterConstraint
 from prefilter_ai.parser_interface import BaseParser
+from prefilter_ai.ontology import OntologyEngine
+from prefilter_ai.validator import ConflictDetector
+from prefilter_ai.relaxer import QueryRelaxer
+from prefilter_ai.registry import SchemaRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -120,11 +128,23 @@ class QueryDiffEngine:
 class PrefilterSession:
     """Manages sequential conversational search state and refinement histories."""
 
-    def __init__(self, parser: BaseParser):
+    def __init__(
+        self,
+        parser: BaseParser,
+        run_pipeline: bool = True,
+        auto_relax: bool = True,
+    ):
         self.parser = parser
         self.engine = QueryDiffEngine()
         self.current_ir: IntermediateRepresentation | None = None
         self.history: list[IntermediateRepresentation] = []
+        self.run_pipeline = run_pipeline
+        self.auto_relax = auto_relax
+
+        # Shared singleton pipeline components
+        self._ontology = OntologyEngine()
+        self._validator = ConflictDetector()
+        self._relaxer = QueryRelaxer(registry=SchemaRegistry())
 
     def process_query(self, query: str) -> IntermediateRepresentation:
         """Process a query in the context of the current conversation history."""
@@ -132,13 +152,27 @@ class PrefilterSession:
         new_ir = self.parser.parse(query)
         new_ir.metadata["query_text"] = query
 
+        # 2. Merge with session state
         if self.current_ir is None:
-            # Starting new session
-            self.current_ir = new_ir
+            merged_ir = new_ir
         else:
-            # Diff and merge with active state
-            self.current_ir = self.engine.diff_and_merge(self.current_ir, new_ir)
+            merged_ir = self.engine.diff_and_merge(self.current_ir, new_ir)
 
+        # 3. Re-run full pipeline on merged state (Gap #6 fix)
+        if self.run_pipeline:
+            # Clear stale conflict/warning data before re-running
+            merged_ir.conflicts = []
+            merged_ir.warnings = []
+            merged_ir.metadata.pop("conflict_tags", None)
+
+            merged_ir = self._ontology.infer(merged_ir, query)
+            merged_ir = self._validator.validate(merged_ir)
+
+            if self.auto_relax and merged_ir.conflicts:
+                relaxed = self._relaxer.relax_from_conflicts(merged_ir)
+                merged_ir.metadata["relaxed_ir"] = relaxed
+
+        self.current_ir = merged_ir
         self.history.append(copy.deepcopy(self.current_ir))
         return self.current_ir
 

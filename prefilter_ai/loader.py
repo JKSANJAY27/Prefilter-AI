@@ -47,7 +47,7 @@ def _try_peft(model_id: str, load_in_4bit: bool) -> tuple[Any, Any]:
     from transformers import AutoTokenizer
 
     quant_kwargs: dict[str, Any] = {}
-    if load_in_4bit:
+    if load_in_4bit and torch.cuda.is_available():
         try:
             from transformers import BitsAndBytesConfig
 
@@ -57,6 +57,8 @@ def _try_peft(model_id: str, load_in_4bit: bool) -> tuple[Any, Any]:
             )
         except Exception:
             logger.warning("bitsandbytes not available; loading in full precision.")
+    elif load_in_4bit:
+        logger.info("CUDA not available; disabling 4-bit quantization and loading in full precision.")
 
     model = AutoPeftModelForCausalLM.from_pretrained(
         model_id,

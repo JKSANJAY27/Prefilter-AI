@@ -1,5 +1,8 @@
 """
 expert.py — Main public interface for Prefilter AI.
+
+PrefilterAI.parse() now runs the complete middleware pipeline
+(parse → ontology → validate → relax), not just the parser stage.
 """
 
 from __future__ import annotations
@@ -9,6 +12,10 @@ from typing import Any
 
 from prefilter_ai.config import ModelFormat, ParseBackend
 from prefilter_ai.parser_interface import SpacyParser, SLMParser, GeminiParser
+from prefilter_ai.ontology import OntologyEngine
+from prefilter_ai.validator import ConflictDetector
+from prefilter_ai.relaxer import QueryRelaxer
+from prefilter_ai.registry import SchemaRegistry
 from prefilter_ai.result import ParseResult
 
 logger = logging.getLogger(__name__)
@@ -18,10 +25,14 @@ class PrefilterAI:
     """
     Main entry point for parsing natural language search queries.
 
-    Three backends are supported:
-    - SLM (default) — Local fine-tuned LoRA adapter model.
-    - SPACY — Fast CPU rule-based extraction (~1ms).
-    - GEMINI — API-driven Gemini extraction.
+    Runs the full middleware pipeline: parse → ontology → validate → relax.
+    Use ``PrefilterPipeline`` for richer output including DSL translations,
+    per-field explanations, and latency profiling.
+
+    Three parser backends:
+    - SPACY  — Rule-based spaCy NER + regex (~1ms, CPU, default).
+    - SLM    — Local fine-tuned Qwen 0.8B LoRA adapter (requires torch+peft).
+    - GEMINI — API-driven Gemini extraction (requires GEMINI_API_KEY).
     """
 
     def __init__(
@@ -31,9 +42,11 @@ class PrefilterAI:
         load_in_4bit: bool = True,
         backend: str = "auto",
         generation_config: dict[str, Any] | None = None,
-        parse_backend: ParseBackend | str = ParseBackend.SLM,
+        parse_backend: ParseBackend | str = ParseBackend.SPACY,
         spacy_model: str = "en_core_web_sm",
         eager: bool = False,
+        run_pipeline: bool = True,
+        auto_relax: bool = True,
     ) -> None:
         self.fmt = ModelFormat(fmt)
         self.model_id = model_id
@@ -42,8 +55,13 @@ class PrefilterAI:
         self.generation_cfg = generation_config
         self.parse_backend = ParseBackend(parse_backend)
         self.spacy_model = spacy_model
+        self.run_pipeline = run_pipeline
+        self.auto_relax = auto_relax
 
         self._parser = None
+        self._ontology = OntologyEngine()
+        self._validator = ConflictDetector()
+        self._relaxer = QueryRelaxer(registry=SchemaRegistry())
 
         if eager:
             self._init_parser()
@@ -68,7 +86,7 @@ class PrefilterAI:
             self._init_parser()
         return self._parser
 
-    # Legacy attributes support (backward compatibility)
+    # Legacy attribute compatibility
     @property
     def model(self):
         if isinstance(self.parser, SLMParser):
@@ -88,11 +106,26 @@ class PrefilterAI:
         return None
 
     def parse(self, query: str) -> ParseResult:
-        """Parse natural language query into ParseResult."""
+        """
+        Parse a natural language query through the full middleware pipeline.
+
+        Runs: parser → ontology inference → conflict detection → relaxation.
+        Returns a ParseResult with the enriched IR attached.
+        """
         if not query or not query.strip():
             raise ValueError("query must be a non-empty string.")
 
         ir = self.parser.parse(query)
+        ir.metadata["query_text"] = query
+
+        if self.run_pipeline:
+            ir = self._ontology.infer(ir, query)
+            ir = self._validator.validate(ir)
+
+            if self.auto_relax and ir.conflicts:
+                relaxed_ir = self._relaxer.relax_from_conflicts(ir)
+                ir.metadata["relaxed_ir"] = relaxed_ir
+
         return ParseResult(
             query=query,
             fields=ir.legacy_fields,
@@ -108,5 +141,6 @@ class PrefilterAI:
         return (
             f"PrefilterAI("
             f"parse_backend={self.parse_backend.value!r}, "
-            f"format={self.fmt.value!r})"
+            f"format={self.fmt.value!r}, "
+            f"run_pipeline={self.run_pipeline})"
         )

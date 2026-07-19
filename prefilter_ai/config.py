@@ -38,8 +38,8 @@ import os
 # Override these by passing `model_id=` to PrefilterAI() if you host
 # your own fine-tuned variants.
 DEFAULT_MODEL_IDS: dict[ModelFormat, str] = {
-    ModelFormat.JSON: "JKSANJAY27/prefilter-ai-json-0.8b",
-    ModelFormat.YAML: "JKSANJAY27/prefilter-ai-yaml-0.8b",
+    ModelFormat.JSON: "SanjayJK/prefilter-ai-json-0.8b",
+    ModelFormat.YAML: "SanjayJK/prefilter-ai-yaml-0.8b",
 }
 
 # Resolve local hg-face folder paths relative to the package root.

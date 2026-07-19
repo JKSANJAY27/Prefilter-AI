@@ -2,6 +2,7 @@
 parser_interface.py — Unified Parser Interface for Prefilter AI.
 
 Supports local fine-tuned SLM, rule-based spaCy, and API-based Gemini models.
+All parsers share the split_operator_value utility from prefilter_ai.utils.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from prefilter_ai.config import ModelFormat, ParseBackend, build_inference_promp
 from prefilter_ai.exceptions import ParseError
 from prefilter_ai.ir import IntermediateRepresentation
 from prefilter_ai.parser import parse_model_output
+from prefilter_ai.utils import split_operator_value, confidence_from_extraction
 
 logger = logging.getLogger(__name__)
 
@@ -37,49 +39,47 @@ class SpacyParser(BaseParser):
         self.extractor = SpacyExtractor(model=spacy_model)
 
     def parse(self, query: str) -> IntermediateRepresentation:
-        fields = self.extractor.extract(query.strip())
-        domain = fields.pop("domain", "general")
-        
+        meta = self.extractor.extract_with_meta(query.strip())
+        domain = meta.pop("domain", "general")
+
         ir = IntermediateRepresentation(domain=domain, intent="search")
-        for k, v in fields.items():
-            if isinstance(v, list):
-                for item in v:
-                    op, val = self._split_operator(item)
+
+        for k, entry in meta.items():
+            # entry is either a raw value or a dict with {value, entity_type, pattern_matched}
+            if isinstance(entry, list):
+                for item in entry:
+                    raw, etype, pmatched = self._unpack_entry(item)
+                    op, val, val_hi = split_operator_value(raw)
+                    conf = confidence_from_extraction(
+                        entity_type=etype,
+                        pattern_matched=pmatched,
+                        is_numeric=op not in {"eq", "ne"},
+                        backend="spacy",
+                    )
                     ir.add_filter(
-                        field_name=k,
-                        operator=op,
-                        value=val,
-                        confidence=0.8,
-                        provenance="spaCy extractor"
+                        field_name=k, operator=op, value=val, value_hi=val_hi,
+                        confidence=conf, provenance="spaCy extractor",
                     )
             else:
-                op, val = self._split_operator(v)
+                raw, etype, pmatched = self._unpack_entry(entry)
+                op, val, val_hi = split_operator_value(raw)
+                conf = confidence_from_extraction(
+                    entity_type=etype,
+                    pattern_matched=pmatched,
+                    is_numeric=op not in {"eq", "ne"},
+                    backend="spacy",
+                )
                 ir.add_filter(
-                    field_name=k,
-                    operator=op,
-                    value=val,
-                    confidence=0.8,
-                    provenance="spaCy extractor"
+                    field_name=k, operator=op, value=val, value_hi=val_hi,
+                    confidence=conf, provenance="spaCy extractor",
                 )
         return ir
 
-    def _split_operator(self, value: Any) -> tuple[str, Any]:
-        if not isinstance(value, str):
-            return "eq", value
-        if ":" in value:
-            parts = value.split(":")
-            op = parts[0]
-            if op in {"lt", "lte", "gt", "gte", "approx", "ne"}:
-                try:
-                    return op, float(parts[1])
-                except ValueError:
-                    return op, parts[1]
-            elif op == "between" and len(parts) == 3:
-                try:
-                    return op, float(parts[1]), float(parts[2])
-                except ValueError:
-                    return op, parts[1]
-        return "eq", value
+    def _unpack_entry(self, entry: Any) -> tuple[Any, str, bool]:
+        """Unpack an extraction entry into (raw_value, entity_type, pattern_matched)."""
+        if isinstance(entry, dict) and "__raw__" in entry:
+            return entry["__raw__"], entry.get("entity_type", ""), entry.get("pattern_matched", False)
+        return entry, "", True  # fallback: treat as raw value, pattern matched
 
 
 class SLMParser(BaseParser):
@@ -131,7 +131,7 @@ class SLMParser(BaseParser):
         prompt_len = inputs["input_ids"].shape[1]
         generated = output_ids[0][prompt_len:]
         raw_output = self.tokenizer.decode(generated, skip_special_tokens=True).strip()
-        
+
         fields = parse_model_output(raw_output, self.fmt)
         domain = fields.pop("domain", "general")
 
@@ -139,42 +139,28 @@ class SLMParser(BaseParser):
         for k, v in fields.items():
             if isinstance(v, list):
                 for item in v:
-                    op, val = self._split_operator(item)
+                    op, val, val_hi = split_operator_value(item)
+                    conf = confidence_from_extraction(
+                        pattern_matched=True,
+                        is_numeric=op not in {"eq", "ne"},
+                        backend="slm",
+                    )
                     ir.add_filter(
-                        field_name=k,
-                        operator=op,
-                        value=val,
-                        confidence=0.95,
-                        provenance="SLM local model"
+                        field_name=k, operator=op, value=val, value_hi=val_hi,
+                        confidence=conf, provenance="SLM fine-tuned model",
                     )
             else:
-                op, val = self._split_operator(v)
+                op, val, val_hi = split_operator_value(v)
+                conf = confidence_from_extraction(
+                    pattern_matched=True,
+                    is_numeric=op not in {"eq", "ne"},
+                    backend="slm",
+                )
                 ir.add_filter(
-                    field_name=k,
-                    operator=op,
-                    value=val,
-                    confidence=0.95,
-                    provenance="SLM local model"
+                    field_name=k, operator=op, value=val, value_hi=val_hi,
+                    confidence=conf, provenance="SLM fine-tuned model",
                 )
         return ir
-
-    def _split_operator(self, value: Any) -> tuple[str, Any]:
-        if not isinstance(value, str):
-            return "eq", value
-        if ":" in value:
-            parts = value.split(":")
-            op = parts[0]
-            if op in {"lt", "lte", "gt", "gte", "approx", "ne"}:
-                try:
-                    return op, float(parts[1])
-                except ValueError:
-                    return op, parts[1]
-            elif op == "between" and len(parts) == 3:
-                try:
-                    return op, float(parts[1]), float(parts[2])
-                except ValueError:
-                    return op, parts[1]
-        return "eq", value
 
 
 class GeminiParser(BaseParser):
@@ -193,7 +179,7 @@ class GeminiParser(BaseParser):
         import urllib.request
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
-        
+
         system_instruction = (
             "You are a structured search query parser. Given a natural language query, extract the fields "
             "as a JSON object. The JSON must contain a 'domain' field, and key-value fields. "
@@ -232,39 +218,25 @@ class GeminiParser(BaseParser):
         for k, v in fields.items():
             if isinstance(v, list):
                 for item in v:
-                    op, val = self._split_operator(item)
+                    op, val, val_hi = split_operator_value(item)
+                    conf = confidence_from_extraction(
+                        pattern_matched=True,
+                        is_numeric=op not in {"eq", "ne"},
+                        backend="gemini",
+                    )
                     ir.add_filter(
-                        field_name=k,
-                        operator=op,
-                        value=val,
-                        confidence=0.99,
-                        provenance="Gemini API"
+                        field_name=k, operator=op, value=val, value_hi=val_hi,
+                        confidence=conf, provenance="Gemini API",
                     )
             else:
-                op, val = self._split_operator(v)
+                op, val, val_hi = split_operator_value(v)
+                conf = confidence_from_extraction(
+                    pattern_matched=True,
+                    is_numeric=op not in {"eq", "ne"},
+                    backend="gemini",
+                )
                 ir.add_filter(
-                    field_name=k,
-                    operator=op,
-                    value=val,
-                    confidence=0.99,
-                    provenance="Gemini API"
+                    field_name=k, operator=op, value=val, value_hi=val_hi,
+                    confidence=conf, provenance="Gemini API",
                 )
         return ir
-
-    def _split_operator(self, value: Any) -> tuple[str, Any]:
-        if not isinstance(value, str):
-            return "eq", value
-        if ":" in value:
-            parts = value.split(":")
-            op = parts[0]
-            if op in {"lt", "lte", "gt", "gte", "approx", "ne"}:
-                try:
-                    return op, float(parts[1])
-                except ValueError:
-                    return op, parts[1]
-            elif op == "between" and len(parts) == 3:
-                try:
-                    return op, float(parts[1]), float(parts[2])
-                except ValueError:
-                    return op, parts[1]
-        return "eq", value

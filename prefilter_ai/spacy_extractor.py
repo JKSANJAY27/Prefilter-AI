@@ -126,6 +126,21 @@ _DOMAIN_KEYWORDS: dict[str, list[str]] = {
         "mileage",
         "transmission",
         "drivetrain",
+        "toyota",
+        "honda",
+        "bmw",
+        "mercedes",
+        "ford",
+        "chevrolet",
+        "chevy",
+        "audi",
+        "volkswagen",
+        "camry",
+        "civic",
+        "corolla",
+        "accord",
+        "mustang",
+        "tesla",
     ],
     "jobs": [
         "job",
@@ -374,13 +389,43 @@ def _extract_exclusions(text: str) -> list[str]:
     return results
 
 
+# ── Domain-specific primary product nouns ─────────────────────────────
+# Used to detect the domain from key product nouns with high weight.
+
+_DOMAIN_PRIMARY_NOUNS: dict[str, list[str]] = {
+    "ecommerce": ["headphones", "laptop", "phone", "tablet", "camera", "monitor", "keyboard",
+                  "mouse", "charger", "shoes", "shirt", "jacket", "watch", "bag", "tv"],
+    "flights": ["flight", "airline", "ticket", "fly", "nonstop", "non-stop"],
+    "hotels": ["hotel", "resort", "accommodation", "suite", "motel", "inn"],
+    "real_estate": ["apartment", "house", "condo", "studio", "townhouse", "villa", "property"],
+    "jobs": ["job", "position", "role", "hiring", "salary", "remote", "full-time", "part-time"],
+    "cars": ["car", "vehicle", "suv", "sedan", "truck", "mileage", "mpg"],
+    "restaurants": ["restaurant", "cafe", "diner", "bistro", "cuisine", "dining"],
+    "movies": ["movie", "film", "series", "show", "documentary"],
+    "healthcare": ["doctor", "therapist", "dentist", "clinic", "hospital", "specialist"],
+    "courses": ["course", "tutorial", "bootcamp", "certification", "learn"],
+    "events": ["concert", "festival", "event", "ticket", "gig", "performance"],
+}
+
+
 def _detect_domain(text: str) -> str | None:
     lower = text.lower()
-    scores: dict[str, int] = {}
+    scores: dict[str, float] = {}
     for domain, keywords in _DOMAIN_KEYWORDS.items():
-        scores[domain] = sum(1 for kw in keywords if kw in lower)
+        # Base score: keyword overlap
+        base = sum(1 for kw in keywords if kw in lower)
+        # Primary noun bonus: exact word match on defining terms gets 3x weight
+        primary_bonus = sum(
+            3 for pn in _DOMAIN_PRIMARY_NOUNS.get(domain, []) if re.search(rf"\b{re.escape(pn)}\b", lower)
+        )
+        scores[domain] = base + primary_bonus
+
+    # Find best; if tied, prefer domain with higher primary noun match
+    if not any(v > 0 for v in scores.values()):
+        return None
+
     best = max(scores, key=scores.__getitem__)
-    return best if scores[best] > 0 else None
+    return best
 
 
 def _extract_stop_count(text: str) -> str | None:
@@ -530,15 +575,54 @@ class SpacyExtractor:
 
         return fields
 
+    # List of product nouns to try to extract from query
+    _ECOMMERCE_PRODUCTS = [
+        "headphones", "earbuds", "earphones", "speakers", "soundbar",
+        "laptop", "notebook", "macbook", "chromebook",
+        "phone", "smartphone", "iphone", "android",
+        "tablet", "ipad",
+        "camera", "dslr", "mirrorless", "webcam",
+        "monitor", "display", "screen",
+        "keyboard", "mouse", "trackpad",
+        "tv", "television", "smart tv",
+        "charger", "cable", "adapter", "hub",
+        "watch", "smartwatch",
+        "shoes", "sneakers", "boots", "sandals",
+        "shirt", "jacket", "hoodie", "pants", "jeans",
+        "bag", "backpack", "wallet",
+        "drone", "printer", "scanner", "router",
+        "gpu", "cpu", "processor", "ram", "ssd", "hard drive",
+    ]
+
     def _fields_ecommerce(self, doc, text: str) -> dict[str, Any]:
         fields: dict[str, Any] = {}
 
-        # Brand from ORG/PRODUCT entities
+        # ── Product extraction (fixed: was missing from original) ──────
+        text_lower = text.lower()
+        for product in self._ECOMMERCE_PRODUCTS:
+            if re.search(rf"\b{re.escape(product)}\b", text_lower):
+                fields["product"] = product
+                break
+
+        # Also check PRODUCT entities from spaCy NER
+        if "product" not in fields:
+            for ent in doc.ents:
+                if ent.label_ == "PRODUCT" and ent.text.lower() not in _STOP_ENTITIES:
+                    fields["product"] = ent.text
+                    break
+
+        # Brand from ORG/PRODUCT entities (skip if already captured as product)
         for ent in doc.ents:
             if ent.label_ in ("ORG", "PRODUCT"):
-                if ent.text.lower() not in _STOP_ENTITIES:
-                    fields.setdefault("brand", ent.text)
+                name = ent.text
+                if name.lower() not in _STOP_ENTITIES and name != fields.get("product"):
+                    fields.setdefault("brand", name)
                     break
+
+        # Rating extraction
+        rating = _extract_rating(text)
+        if rating:
+            fields["rating"] = rating
 
         # Color exclusions
         excls = _extract_exclusions(text)
@@ -556,7 +640,7 @@ class SpacyExtractor:
         if price:
             fields["price"] = price
 
-        # Feature phrases (naive: noun chunks not already captured)
+        # Feature phrases
         feature_phrases = [
             "noise cancelling",
             "wireless",
@@ -568,6 +652,8 @@ class SpacyExtractor:
             "amoled",
             "retina",
             "touch screen",
+            "active noise cancellation",
+            "anc",
         ]
         for phrase in feature_phrases:
             if re.search(re.escape(phrase), text, re.IGNORECASE):
@@ -818,15 +904,10 @@ class SpacyExtractor:
         """
         Extract structured fields from a natural language search query.
 
-        Parameters
-        ----------
-        query : str
-            The user's search query.
-
         Returns
         -------
         dict[str, Any]
-            Extracted fields.  Numeric constraints use operator prefixes
+            Extracted fields. Numeric constraints use operator prefixes
             identical to the SLM adapters (``lt:``, ``gte:``, etc.).
         """
         if not query or not query.strip():
@@ -843,7 +924,6 @@ class SpacyExtractor:
                 domain_fields = getattr(self, dispatcher_name)(doc, query)
                 fields.update(domain_fields)
         else:
-            # Fallback: generic numeric + exclusion extraction
             price = _extract_numeric_constraint(query, "price")
             if price:
                 fields["price"] = price
@@ -852,6 +932,66 @@ class SpacyExtractor:
                 fields["exclusions"] = excls
 
         return fields
+
+    def extract_with_meta(self, query: str) -> dict[str, Any]:
+        """
+        Extended extract that also returns entity metadata for confidence scoring.
+
+        Returns a dict where values are either:
+          - Plain values (strings, numbers, booleans)
+          - Dicts with ``{"__raw__": value, "entity_type": str, "pattern_matched": bool}``
+          - Lists of the above
+
+        The parser_interface SpacyParser reads this metadata to compute real
+        per-field confidence scores instead of returning a flat 0.8 constant.
+        """
+        if not query or not query.strip():
+            return {}
+
+        doc = self.nlp(query)
+        domain = _detect_domain(query)
+
+        # Build entity label lookup for fast access
+        ent_label: dict[str, str] = {ent.text: ent.label_ for ent in doc.ents}
+
+        raw_fields = {}
+        if domain:
+            raw_fields["domain"] = domain
+            dispatcher_name = self._DOMAIN_DISPATCHERS.get(domain)
+            if dispatcher_name:
+                domain_fields = getattr(self, dispatcher_name)(doc, query)
+                raw_fields.update(domain_fields)
+        else:
+            price = _extract_numeric_constraint(query, "price")
+            if price:
+                raw_fields["price"] = price
+
+        # Annotate each field with metadata
+        meta: dict[str, Any] = {}
+        _NUMERIC_PREFIXES = {"lt", "lte", "gt", "gte", "approx", "between"}
+
+        for key, val in raw_fields.items():
+            if key == "domain":
+                meta[key] = val
+                continue
+
+            if isinstance(val, list):
+                items = []
+                for item in val:
+                    raw_str = item if isinstance(item, str) else str(item)
+                    is_num = any(raw_str.startswith(p + ":") for p in _NUMERIC_PREFIXES)
+                    # For list entries (e.g. color exclusions), pattern match is true
+                    items.append({"__raw__": item, "entity_type": "", "pattern_matched": True, "is_numeric": is_num})
+                meta[key] = items
+            else:
+                raw_str = val if isinstance(val, str) else str(val)
+                is_num = any(raw_str.startswith(p + ":") for p in _NUMERIC_PREFIXES)
+                etype = ent_label.get(str(val), "")
+                # Numeric constraints come from regex; text from NER
+                pmatched = is_num or (etype == "")
+                meta[key] = {"__raw__": val, "entity_type": etype, "pattern_matched": pmatched, "is_numeric": is_num}
+
+        return meta
 
     def __repr__(self) -> str:
         loaded = self._nlp is not None
