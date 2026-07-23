@@ -113,6 +113,38 @@ class PipelineResult:
     def total_latency_ms(self) -> float:
         return sum(self.latency_ms.values())
 
+    def execute(self, connector: Any, **kwargs: Any) -> Any:
+        """
+        Execute the translated query directly against a target database connector.
+
+        Parameters
+        ----------
+        connector : BaseConnector
+            Instance of SQLConnector, MongoConnector, ElasticsearchConnector, or ChromaDBConnector.
+        **kwargs:
+            Connector-specific execution arguments (limit, select_fields, etc.).
+        """
+        from prefilter_ai.connectors import (
+            SQLConnector,
+            MongoConnector,
+            ElasticsearchConnector,
+            ChromaDBConnector,
+        )
+
+        if isinstance(connector, SQLConnector):
+            return connector.execute(self.sql, **kwargs)
+        elif isinstance(connector, MongoConnector):
+            return connector.execute(self.mongodb, **kwargs)
+        elif isinstance(connector, ElasticsearchConnector):
+            return connector.execute(self.elasticsearch, **kwargs)
+        elif isinstance(connector, ChromaDBConnector):
+            return connector.execute(self.chromadb, **kwargs)
+        elif hasattr(connector, "execute"):
+            return connector.execute(self, **kwargs)
+        else:
+            raise ValueError(f"Unsupported connector type: {type(connector)}")
+
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize the full result as a plain dict (JSON-safe)."""
         return {

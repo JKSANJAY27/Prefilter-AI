@@ -153,6 +153,35 @@ class ParseResult:
         ir = self._get_or_create_ir()
         return ElasticsearchTranslator().translate(ir)
 
+    def execute(self, connector: Any, **kwargs: Any) -> Any:
+        """
+        Execute the query against a database connector.
+
+        Parameters
+        ----------
+        connector : BaseConnector
+            Instance of SQLConnector, MongoConnector, ElasticsearchConnector, or ChromaDBConnector.
+        """
+        from prefilter_ai.connectors import (
+            SQLConnector,
+            MongoConnector,
+            ElasticsearchConnector,
+            ChromaDBConnector,
+        )
+
+        if isinstance(connector, SQLConnector):
+            return connector.execute(self.to_sql(), **kwargs)
+        elif isinstance(connector, MongoConnector):
+            return connector.execute(self.to_mongodb(), **kwargs)
+        elif isinstance(connector, ElasticsearchConnector):
+            return connector.execute(self.to_elasticsearch(), **kwargs)
+        elif isinstance(connector, ChromaDBConnector):
+            return connector.execute(self.to_chromadb(), **kwargs)
+        elif hasattr(connector, "execute"):
+            return connector.execute(self, **kwargs)
+        else:
+            raise ValueError(f"Unsupported connector type: {type(connector)}")
+
     # ------------------------------------------------------------------
     # Operator helpers: let callers decode operator-prefixed numerics
     # ------------------------------------------------------------------

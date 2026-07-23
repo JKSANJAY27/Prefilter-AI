@@ -1,49 +1,39 @@
-name: CI
+name: CI / Test Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ master, main ]
   pull_request:
-    branches: [main]
+    branches: [ master, main ]
 
 jobs:
   test:
+    name: Run Unit Tests & Linting
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,platform]"
+          python -m spacy download en_core_web_sm
 
-      - name: Lint with ruff
-        run: ruff check search_expert/ tests/
-
-      - name: Run unit tests (no GPU)
-        run: pytest tests/ -v --tb=short
-
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Build package
+      - name: Lint with Ruff
         run: |
-          pip install build
-          python -m build
-      - name: Check dist
+          ruff check prefilter_ai prefilter_platform tests
+
+      - name: Run Pytest suite
         run: |
-          pip install twine
-          twine check dist/*
+          pytest tests/ -v
