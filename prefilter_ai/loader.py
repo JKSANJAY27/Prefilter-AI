@@ -60,7 +60,9 @@ def _try_peft(model_id: str, load_in_4bit: bool) -> tuple[Any, Any]:
         except Exception:
             logger.warning("bitsandbytes not available; loading in full precision.")
     elif load_in_4bit:
-        logger.info("CUDA not available; disabling 4-bit quantization and loading in full precision.")
+        logger.info(
+            "CUDA not available; disabling 4-bit quantization and loading in full precision."
+        )
 
     model = AutoPeftModelForCausalLM.from_pretrained(
         model_id,
@@ -123,9 +125,7 @@ def load_model(
         If all attempted backends fail.
     """
     repo = model_id or DEFAULT_MODEL_IDS[fmt]
-    logger.info(
-        "Loading model from %s (backend=%s, 4bit=%s)", repo, backend, load_in_4bit
-    )
+    logger.info("Loading model from %s (backend=%s, 4bit=%s)", repo, backend, load_in_4bit)
 
     errors: list[str] = []
 

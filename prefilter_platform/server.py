@@ -23,9 +23,6 @@ Run
 from __future__ import annotations
 
 import json
-import os
-import time
-import uuid
 import logging
 from collections import defaultdict
 from pathlib import Path
@@ -36,16 +33,17 @@ logger = logging.getLogger("prefilter.platform")
 
 # ── Try FastAPI, fall back to stdlib http.server ─────────────────────
 try:
-    from fastapi import FastAPI, HTTPException, Request
-    from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
-    from fastapi.staticfiles import StaticFiles
+    from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import HTMLResponse, JSONResponse
+    from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
+
     _FASTAPI = True
 except ImportError:
     _FASTAPI = False
 
-from prefilter_ai import PrefilterPipeline, PipelineSession
+from prefilter_ai import PipelineSession, PrefilterPipeline
 from prefilter_ai.registry import SchemaRegistry
 
 # ── Shared pipeline & session store ───────────────────────────────────
@@ -118,7 +116,9 @@ if _FASTAPI:
         index = _DASHBOARD_DIR / "index.html"
         if index.exists():
             return HTMLResponse(content=index.read_text(encoding="utf-8"))
-        return HTMLResponse("<h1>Prefilter AI Platform</h1><p>Dashboard not found. Check platform/dashboard/index.html</p>")
+        return HTMLResponse(
+            "<h1>Prefilter AI Platform</h1><p>Dashboard not found. Check platform/dashboard/index.html</p>"
+        )
 
     @app.get("/health")
     async def health():
@@ -178,7 +178,7 @@ if _FASTAPI:
                         "description": fdef.description,
                     }
                     for fname, fdef in schema.fields.items()
-                }
+                },
             }
         return {"domains": domains}
 
@@ -254,15 +254,19 @@ else:
 
 # ── Entry point ────────────────────────────────────────────────────────
 
+
 def run(host: str = "0.0.0.0", port: int = 8080):
     if _FASTAPI:
         import uvicorn
+
         logger.info("Starting Prefilter AI Platform (FastAPI) on http://%s:%d", host, port)
         logger.info("Dashboard: http://localhost:%d/", port)
         logger.info("API docs:  http://localhost:%d/docs", port)
         uvicorn.run(app, host=host, port=port)
     else:
-        logger.info("FastAPI not installed. Starting stdlib fallback server on http://%s:%d", host, port)
+        logger.info(
+            "FastAPI not installed. Starting stdlib fallback server on http://%s:%d", host, port
+        )
         logger.info("Install FastAPI for full REST API: pip install fastapi uvicorn")
         with socketserver.TCPServer((host, port), _Handler) as httpd:
             httpd.serve_forever()

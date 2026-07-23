@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 
 class Importance(int, Enum):
@@ -86,33 +85,52 @@ class SchemaRegistry:
         ecommerce.add_field("price", DataType.NUMBER, Importance.HIGH, "Product price constraint")
         ecommerce.add_field("color", DataType.ARRAY, Importance.LOW, "Colors or color exclusions")
         ecommerce.add_field("rating", DataType.NUMBER, Importance.LOW, "Minimum review rating")
-        ecommerce.add_field("feature", DataType.STRING, Importance.MEDIUM, "Specific product feature or spec")
+        ecommerce.add_field(
+            "feature", DataType.STRING, Importance.MEDIUM, "Specific product feature or spec"
+        )
         self.register(ecommerce)
 
         # 2. Flights
         flights = DomainSchema("flights", description="Flight bookings")
         flights.add_field("origin", DataType.STRING, Importance.HIGH, "Origin airport/city")
-        flights.add_field("destination", DataType.STRING, Importance.HIGH, "Destination airport/city")
-        flights.add_field("cabin_class", DataType.STRING, Importance.MEDIUM, "Cabin class: business, economy, first")
+        flights.add_field(
+            "destination", DataType.STRING, Importance.HIGH, "Destination airport/city"
+        )
+        flights.add_field(
+            "cabin_class",
+            DataType.STRING,
+            Importance.MEDIUM,
+            "Cabin class: business, economy, first",
+        )
         flights.add_field("stops", DataType.NUMBER, Importance.MEDIUM, "Maximum number of layovers")
         flights.add_field("price", DataType.NUMBER, Importance.HIGH, "Ticket price limit")
         self.register(flights)
 
         # 3. Real Estate
         real_estate = DomainSchema("real_estate", description="Property rentals and sales")
-        real_estate.add_field("property_type", DataType.STRING, Importance.HIGH, "Apartment, house, townhome")
+        real_estate.add_field(
+            "property_type", DataType.STRING, Importance.HIGH, "Apartment, house, townhome"
+        )
         real_estate.add_field("city", DataType.STRING, Importance.HIGH, "Target city/location")
-        real_estate.add_field("price", DataType.NUMBER, Importance.HIGH, "Monthly rent or purchase budget")
+        real_estate.add_field(
+            "price", DataType.NUMBER, Importance.HIGH, "Monthly rent or purchase budget"
+        )
         real_estate.add_field("bedrooms", DataType.NUMBER, Importance.MEDIUM, "Number of bedrooms")
-        real_estate.add_field("bathrooms", DataType.NUMBER, Importance.MEDIUM, "Number of bathrooms")
+        real_estate.add_field(
+            "bathrooms", DataType.NUMBER, Importance.MEDIUM, "Number of bathrooms"
+        )
         self.register(real_estate)
 
         # 4. Jobs
         jobs = DomainSchema("jobs", description="Job listings and career opportunities")
-        jobs.add_field("job_title", DataType.STRING, Importance.HIGH, "Role title, e.g. software engineer")
+        jobs.add_field(
+            "job_title", DataType.STRING, Importance.HIGH, "Role title, e.g. software engineer"
+        )
         jobs.add_field("salary", DataType.NUMBER, Importance.HIGH, "Minimum salary requirement")
         jobs.add_field("location", DataType.STRING, Importance.MEDIUM, "City or remote preference")
-        jobs.add_field("experience_level", DataType.STRING, Importance.MEDIUM, "Junior, Senior, Lead")
+        jobs.add_field(
+            "experience_level", DataType.STRING, Importance.MEDIUM, "Junior, Senior, Lead"
+        )
         self.register(jobs)
 
         # 5. Hotels
@@ -134,10 +152,16 @@ class SchemaRegistry:
 
         # 7. Restaurants
         restaurants = DomainSchema("restaurants", description="Dine-out and delivery bookings")
-        restaurants.add_field("cuisine", DataType.STRING, Importance.HIGH, "Italian, Vegan, Chinese")
+        restaurants.add_field(
+            "cuisine", DataType.STRING, Importance.HIGH, "Italian, Vegan, Chinese"
+        )
         restaurants.add_field("city", DataType.STRING, Importance.HIGH, "Target location")
-        restaurants.add_field("price", DataType.NUMBER, Importance.MEDIUM, "Budget per person indicator")
-        restaurants.add_field("features", DataType.ARRAY, Importance.LOW, "Outdoor seating, dog friendly")
+        restaurants.add_field(
+            "price", DataType.NUMBER, Importance.MEDIUM, "Budget per person indicator"
+        )
+        restaurants.add_field(
+            "features", DataType.ARRAY, Importance.LOW, "Outdoor seating, dog friendly"
+        )
         self.register(restaurants)
 
         # 8. Movies
@@ -149,9 +173,13 @@ class SchemaRegistry:
 
         # 9. Healthcare
         healthcare = DomainSchema("healthcare", description="Medical provider directory")
-        healthcare.add_field("specialty", DataType.STRING, Importance.HIGH, "Therapist, Dentist, Cardiologist")
+        healthcare.add_field(
+            "specialty", DataType.STRING, Importance.HIGH, "Therapist, Dentist, Cardiologist"
+        )
         healthcare.add_field("city", DataType.STRING, Importance.HIGH, "Target location")
-        healthcare.add_field("insurance", DataType.STRING, Importance.HIGH, "Accepted insurance network")
+        healthcare.add_field(
+            "insurance", DataType.STRING, Importance.HIGH, "Accepted insurance network"
+        )
         self.register(healthcare)
 
         # 10. Courses

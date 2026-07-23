@@ -5,6 +5,7 @@ elasticsearch.py — Elasticsearch DSL Query Translator for Prefilter AI.
 from __future__ import annotations
 
 from typing import Any
+
 from prefilter_ai.ir import IntermediateRepresentation
 from prefilter_ai.translators.base import BaseTranslator
 
@@ -15,7 +16,7 @@ class ElasticsearchTranslator(BaseTranslator):
     def translate(self, ir: IntermediateRepresentation) -> dict[str, Any]:
         """
         Translates IR to Elasticsearch bool query DSL.
-        
+
         Maps:
           - explicit/implicit filters -> `must` (requirements) or `must_not` (exclusions)
           - soft preferences -> `should` (ranking signals)
@@ -52,14 +53,16 @@ class ElasticsearchTranslator(BaseTranslator):
 
         # 2. Translate soft preferences
         for p in ir.preferences:
-            should_clauses.append({
-                "term": {
-                    p.field: {
-                        "value": p.value,
-                        "boost": p.weight * 2.0  # boost based on preference weight
+            should_clauses.append(
+                {
+                    "term": {
+                        p.field: {
+                            "value": p.value,
+                            "boost": p.weight * 2.0,  # boost based on preference weight
+                        }
                     }
                 }
-            })
+            )
 
         # Assemble bool query
         bool_query: dict[str, Any] = {}

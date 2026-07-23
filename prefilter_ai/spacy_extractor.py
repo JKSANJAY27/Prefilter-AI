@@ -42,7 +42,7 @@ def _get_nlp():
     global _nlp
     if _nlp is None:
         try:
-            import spacy  # noqa: F401
+            import spacy
         except ImportError:
             raise ImportError(
                 "spacy is required for the SpacyExtractor backend.\n"
@@ -254,9 +254,7 @@ _OPERATOR_PATTERNS: list[tuple[re.Pattern, str]] = [
     ),
     # at least / N+  (gte)
     (
-        re.compile(
-            r"(?:at\s+least|minimum|min\.?|(?<!\w)from)\s+" + _NUM, re.IGNORECASE
-        ),
+        re.compile(r"(?:at\s+least|minimum|min\.?|(?<!\w)from)\s+" + _NUM, re.IGNORECASE),
         "gte",
     ),
     (re.compile(_NUM + r"\s*\+"), "gte"),
@@ -393,8 +391,23 @@ def _extract_exclusions(text: str) -> list[str]:
 # Used to detect the domain from key product nouns with high weight.
 
 _DOMAIN_PRIMARY_NOUNS: dict[str, list[str]] = {
-    "ecommerce": ["headphones", "laptop", "phone", "tablet", "camera", "monitor", "keyboard",
-                  "mouse", "charger", "shoes", "shirt", "jacket", "watch", "bag", "tv"],
+    "ecommerce": [
+        "headphones",
+        "laptop",
+        "phone",
+        "tablet",
+        "camera",
+        "monitor",
+        "keyboard",
+        "mouse",
+        "charger",
+        "shoes",
+        "shirt",
+        "jacket",
+        "watch",
+        "bag",
+        "tv",
+    ],
     "flights": ["flight", "airline", "ticket", "fly", "nonstop", "non-stop"],
     "hotels": ["hotel", "resort", "accommodation", "suite", "motel", "inn"],
     "real_estate": ["apartment", "house", "condo", "studio", "townhouse", "villa", "property"],
@@ -416,7 +429,9 @@ def _detect_domain(text: str) -> str | None:
         base = sum(1 for kw in keywords if kw in lower)
         # Primary noun bonus: exact word match on defining terms gets 3x weight
         primary_bonus = sum(
-            3 for pn in _DOMAIN_PRIMARY_NOUNS.get(domain, []) if re.search(rf"\b{re.escape(pn)}\b", lower)
+            3
+            for pn in _DOMAIN_PRIMARY_NOUNS.get(domain, [])
+            if re.search(rf"\b{re.escape(pn)}\b", lower)
         )
         scores[domain] = base + primary_bonus
 
@@ -577,21 +592,62 @@ class SpacyExtractor:
 
     # List of product nouns to try to extract from query
     _ECOMMERCE_PRODUCTS = [
-        "headphones", "earbuds", "earphones", "speakers", "soundbar",
-        "laptop", "notebook", "macbook", "chromebook",
-        "phone", "smartphone", "iphone", "android",
-        "tablet", "ipad",
-        "camera", "dslr", "mirrorless", "webcam",
-        "monitor", "display", "screen",
-        "keyboard", "mouse", "trackpad",
-        "tv", "television", "smart tv",
-        "charger", "cable", "adapter", "hub",
-        "watch", "smartwatch",
-        "shoes", "sneakers", "boots", "sandals",
-        "shirt", "jacket", "hoodie", "pants", "jeans",
-        "bag", "backpack", "wallet",
-        "drone", "printer", "scanner", "router",
-        "gpu", "cpu", "processor", "ram", "ssd", "hard drive",
+        "headphones",
+        "earbuds",
+        "earphones",
+        "speakers",
+        "soundbar",
+        "laptop",
+        "notebook",
+        "macbook",
+        "chromebook",
+        "phone",
+        "smartphone",
+        "iphone",
+        "android",
+        "tablet",
+        "ipad",
+        "camera",
+        "dslr",
+        "mirrorless",
+        "webcam",
+        "monitor",
+        "display",
+        "screen",
+        "keyboard",
+        "mouse",
+        "trackpad",
+        "tv",
+        "television",
+        "smart tv",
+        "charger",
+        "cable",
+        "adapter",
+        "hub",
+        "watch",
+        "smartwatch",
+        "shoes",
+        "sneakers",
+        "boots",
+        "sandals",
+        "shirt",
+        "jacket",
+        "hoodie",
+        "pants",
+        "jeans",
+        "bag",
+        "backpack",
+        "wallet",
+        "drone",
+        "printer",
+        "scanner",
+        "router",
+        "gpu",
+        "cpu",
+        "processor",
+        "ram",
+        "ssd",
+        "hard drive",
     ]
 
     def _fields_ecommerce(self, doc, text: str) -> dict[str, Any]:
@@ -981,7 +1037,14 @@ class SpacyExtractor:
                     raw_str = item if isinstance(item, str) else str(item)
                     is_num = any(raw_str.startswith(p + ":") for p in _NUMERIC_PREFIXES)
                     # For list entries (e.g. color exclusions), pattern match is true
-                    items.append({"__raw__": item, "entity_type": "", "pattern_matched": True, "is_numeric": is_num})
+                    items.append(
+                        {
+                            "__raw__": item,
+                            "entity_type": "",
+                            "pattern_matched": True,
+                            "is_numeric": is_num,
+                        }
+                    )
                 meta[key] = items
             else:
                 raw_str = val if isinstance(val, str) else str(val)
@@ -989,7 +1052,12 @@ class SpacyExtractor:
                 etype = ent_label.get(str(val), "")
                 # Numeric constraints come from regex; text from NER
                 pmatched = is_num or (etype == "")
-                meta[key] = {"__raw__": val, "entity_type": etype, "pattern_matched": pmatched, "is_numeric": is_num}
+                meta[key] = {
+                    "__raw__": val,
+                    "entity_type": etype,
+                    "pattern_matched": pmatched,
+                    "is_numeric": is_num,
+                }
 
         return meta
 

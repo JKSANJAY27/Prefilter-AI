@@ -28,4 +28,3 @@ class BaseConnector(ABC):
         Any
             Database execution results.
         """
-        pass

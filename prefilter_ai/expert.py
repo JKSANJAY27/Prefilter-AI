@@ -11,12 +11,12 @@ import logging
 from typing import Any
 
 from prefilter_ai.config import ModelFormat, ParseBackend
-from prefilter_ai.parser_interface import SpacyParser, SLMParser, GeminiParser
 from prefilter_ai.ontology import OntologyEngine
-from prefilter_ai.validator import ConflictDetector
-from prefilter_ai.relaxer import QueryRelaxer
+from prefilter_ai.parser_interface import GeminiParser, SLMParser, SpacyParser
 from prefilter_ai.registry import SchemaRegistry
+from prefilter_ai.relaxer import QueryRelaxer
 from prefilter_ai.result import ParseResult
+from prefilter_ai.validator import ConflictDetector
 
 logger = logging.getLogger(__name__)
 

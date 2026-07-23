@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 from prefilter_ai.connectors.base import BaseConnector
 
 logger = logging.getLogger(__name__)

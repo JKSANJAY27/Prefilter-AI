@@ -35,22 +35,22 @@ def repair_json_string(s: str) -> str:
         if escape:
             escape = False
             continue
-        if char == '\\':
+        if char == "\\":
             escape = True
             continue
         if char == '"':
             in_quote = not in_quote
             continue
         if not in_quote:
-            if char == '{':
-                stack.append('}')
-            elif char == '[':
-                stack.append(']')
-            elif char == '}':
-                if stack and stack[-1] == '}':
+            if char == "{":
+                stack.append("}")
+            elif char == "[":
+                stack.append("]")
+            elif char == "}":
+                if stack and stack[-1] == "}":
                     stack.pop()
-            elif char == ']':
-                if stack and stack[-1] == ']':
+            elif char == "]":
+                if stack and stack[-1] == "]":
                     stack.pop()
 
     if in_quote:
@@ -76,6 +76,7 @@ def _parse_json(text: str) -> dict:
     # 2. Try third-party json-repair if available
     try:
         import json_repair
+
         result = json_repair.repair_json(text, return_objects=True)
         if isinstance(result, dict):
             return result
@@ -90,9 +91,9 @@ def _parse_json(text: str) -> dict:
         candidate = match.group()
         # Clean trailing prose after the closing brace if there is any
         # We find the last matching brace in case there is trailing prose
-        last_brace = candidate.rfind('}')
+        last_brace = candidate.rfind("}")
         if last_brace != -1:
-            candidate = candidate[:last_brace+1]
+            candidate = candidate[: last_brace + 1]
         try:
             result = json.loads(candidate)
             if isinstance(result, dict):

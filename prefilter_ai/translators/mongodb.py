@@ -5,6 +5,7 @@ mongodb.py — MongoDB Query Translator for Prefilter AI.
 from __future__ import annotations
 
 from typing import Any
+
 from prefilter_ai.ir import IntermediateRepresentation
 from prefilter_ai.translators.base import BaseTranslator
 

@@ -30,17 +30,17 @@ Usage
 
 from __future__ import annotations
 
-import time
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from prefilter_ai.ir import IntermediateRepresentation
 from prefilter_ai.ontology import OntologyEngine
-from prefilter_ai.validator import ConflictDetector
-from prefilter_ai.relaxer import QueryRelaxer
 from prefilter_ai.registry import SchemaRegistry
+from prefilter_ai.relaxer import QueryRelaxer
 from prefilter_ai.utils import build_explanation
+from prefilter_ai.validator import ConflictDetector
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,7 @@ class PipelineResult:
     middleware pipeline, including the IR, conflict list, DSL translations,
     per-field explanations, and stage latency breakdown.
     """
+
     query: str
     ir: IntermediateRepresentation
     relaxed_ir: IntermediateRepresentation | None = None
@@ -78,6 +79,7 @@ class PipelineResult:
         """Return (WHERE clause, params) for SQL backends."""
         if self._sql is None:
             from prefilter_ai.translators.sql import SQLTranslator
+
             self._sql = SQLTranslator().translate(self.ir)
         return self._sql
 
@@ -86,6 +88,7 @@ class PipelineResult:
         """Return Elasticsearch query DSL."""
         if self._elasticsearch is None:
             from prefilter_ai.translators.elasticsearch import ElasticsearchTranslator
+
             self._elasticsearch = ElasticsearchTranslator().translate(self.ir)
         return self._elasticsearch
 
@@ -94,6 +97,7 @@ class PipelineResult:
         """Return MongoDB filter dict."""
         if self._mongodb is None:
             from prefilter_ai.translators.mongodb import MongoDBTranslator
+
             self._mongodb = MongoDBTranslator().translate(self.ir)
         return self._mongodb
 
@@ -102,6 +106,7 @@ class PipelineResult:
         """Return ChromaDB where-metadata dict."""
         if self._chromadb is None:
             from prefilter_ai.translators.chromadb import ChromaDBTranslator
+
             self._chromadb = ChromaDBTranslator().translate(self.ir)
         return self._chromadb
 
@@ -125,10 +130,10 @@ class PipelineResult:
             Connector-specific execution arguments (limit, select_fields, etc.).
         """
         from prefilter_ai.connectors import (
-            SQLConnector,
-            MongoConnector,
-            ElasticsearchConnector,
             ChromaDBConnector,
+            ElasticsearchConnector,
+            MongoConnector,
+            SQLConnector,
         )
 
         if isinstance(connector, SQLConnector):
@@ -143,7 +148,6 @@ class PipelineResult:
             return connector.execute(self, **kwargs)
         else:
             raise ValueError(f"Unsupported connector type: {type(connector)}")
-
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the full result as a plain dict (JSON-safe)."""
@@ -162,7 +166,9 @@ class PipelineResult:
             "relaxed": {
                 "filters": [f.to_dict() for f in self.relaxed_ir.filters],
                 "warnings": self.relaxed_ir.warnings,
-            } if self.relaxed_ir else None,
+            }
+            if self.relaxed_ir
+            else None,
             "sql": self.sql[0] if self.sql else None,
             "elasticsearch": self.elasticsearch,
             "mongodb": self.mongodb,
@@ -244,11 +250,13 @@ class PrefilterPipeline:
         return self._parser_instance
 
     def _build_parser(self):
-        from prefilter_ai.parser_interface import SpacyParser, SLMParser, GeminiParser
+        from prefilter_ai.parser_interface import GeminiParser, SLMParser, SpacyParser
+
         if self.parser_name == "spacy":
             return SpacyParser(spacy_model=self._spacy_model)
         elif self.parser_name == "slm":
             from prefilter_ai.config import ModelFormat
+
             return SLMParser(
                 fmt=ModelFormat(self._slm_fmt),
                 model_id=self._slm_model_id,
@@ -297,13 +305,17 @@ class PrefilterPipeline:
         t0 = time.perf_counter()
         ir = self._ontology.infer(ir, query)
         latency["ontology_ms"] = round((time.perf_counter() - t0) * 1000, 3)
-        logger.debug("Stage 2 (ontology): %s ms, preferences=%d", latency["ontology_ms"], len(ir.preferences))
+        logger.debug(
+            "Stage 2 (ontology): %s ms, preferences=%d", latency["ontology_ms"], len(ir.preferences)
+        )
 
         # ── Stage 3: Conflict & feasibility validation ─────────────────
         t0 = time.perf_counter()
         ir = self._validator.validate(ir)
         latency["validate_ms"] = round((time.perf_counter() - t0) * 1000, 3)
-        logger.debug("Stage 3 (validate): %s ms, conflicts=%d", latency["validate_ms"], len(ir.conflicts))
+        logger.debug(
+            "Stage 3 (validate): %s ms, conflicts=%d", latency["validate_ms"], len(ir.conflicts)
+        )
 
         # ── Stage 4: Conflict-aware relaxation ─────────────────────────
         relaxed_ir = None
@@ -333,7 +345,7 @@ class PrefilterPipeline:
     # Convenience: run a session (multi-turn)
     # ------------------------------------------------------------------
 
-    def new_session(self) -> "PipelineSession":
+    def new_session(self) -> PipelineSession:
         """Create a new stateful conversational search session."""
         return PipelineSession(pipeline=self)
 

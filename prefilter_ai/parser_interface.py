@@ -7,17 +7,17 @@ All parsers share the split_operator_value utility from prefilter_ai.utils.
 
 from __future__ import annotations
 
-import os
 import json
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import Any
 
-from prefilter_ai.config import ModelFormat, ParseBackend, build_inference_prompt, get_system_prompt
+from prefilter_ai.config import ModelFormat, build_inference_prompt
 from prefilter_ai.exceptions import ParseError
 from prefilter_ai.ir import IntermediateRepresentation
 from prefilter_ai.parser import parse_model_output
-from prefilter_ai.utils import split_operator_value, confidence_from_extraction
+from prefilter_ai.utils import confidence_from_extraction, split_operator_value
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,6 @@ class BaseParser(ABC):
     @abstractmethod
     def parse(self, query: str) -> IntermediateRepresentation:
         """Parse natural language query into IntermediateRepresentation."""
-        pass
 
 
 class SpacyParser(BaseParser):
@@ -36,6 +35,7 @@ class SpacyParser(BaseParser):
 
     def __init__(self, spacy_model: str = "en_core_web_sm"):
         from prefilter_ai.spacy_extractor import SpacyExtractor
+
         self.extractor = SpacyExtractor(model=spacy_model)
 
     def parse(self, query: str) -> IntermediateRepresentation:
@@ -57,8 +57,12 @@ class SpacyParser(BaseParser):
                         backend="spacy",
                     )
                     ir.add_filter(
-                        field_name=k, operator=op, value=val, value_hi=val_hi,
-                        confidence=conf, provenance="spaCy extractor",
+                        field_name=k,
+                        operator=op,
+                        value=val,
+                        value_hi=val_hi,
+                        confidence=conf,
+                        provenance="spaCy extractor",
                     )
             else:
                 raw, etype, pmatched = self._unpack_entry(entry)
@@ -70,15 +74,23 @@ class SpacyParser(BaseParser):
                     backend="spacy",
                 )
                 ir.add_filter(
-                    field_name=k, operator=op, value=val, value_hi=val_hi,
-                    confidence=conf, provenance="spaCy extractor",
+                    field_name=k,
+                    operator=op,
+                    value=val,
+                    value_hi=val_hi,
+                    confidence=conf,
+                    provenance="spaCy extractor",
                 )
         return ir
 
     def _unpack_entry(self, entry: Any) -> tuple[Any, str, bool]:
         """Unpack an extraction entry into (raw_value, entity_type, pattern_matched)."""
         if isinstance(entry, dict) and "__raw__" in entry:
-            return entry["__raw__"], entry.get("entity_type", ""), entry.get("pattern_matched", False)
+            return (
+                entry["__raw__"],
+                entry.get("entity_type", ""),
+                entry.get("pattern_matched", False),
+            )
         return entry, "", True  # fallback: treat as raw value, pattern matched
 
 
@@ -94,6 +106,7 @@ class SLMParser(BaseParser):
         generation_config: dict[str, Any] | None = None,
     ):
         from prefilter_ai.loader import load_model
+
         self.fmt = ModelFormat(fmt)
         self.generation_cfg = generation_config or {
             "max_new_tokens": 256,
@@ -146,8 +159,12 @@ class SLMParser(BaseParser):
                         backend="slm",
                     )
                     ir.add_filter(
-                        field_name=k, operator=op, value=val, value_hi=val_hi,
-                        confidence=conf, provenance="SLM fine-tuned model",
+                        field_name=k,
+                        operator=op,
+                        value=val,
+                        value_hi=val_hi,
+                        confidence=conf,
+                        provenance="SLM fine-tuned model",
                     )
             else:
                 op, val, val_hi = split_operator_value(v)
@@ -157,8 +174,12 @@ class SLMParser(BaseParser):
                     backend="slm",
                 )
                 ir.add_filter(
-                    field_name=k, operator=op, value=val, value_hi=val_hi,
-                    confidence=conf, provenance="SLM fine-tuned model",
+                    field_name=k,
+                    operator=op,
+                    value=val,
+                    value_hi=val_hi,
+                    confidence=conf,
+                    provenance="SLM fine-tuned model",
                 )
         return ir
 
@@ -170,7 +191,9 @@ class GeminiParser(BaseParser):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.model_name = model_name
         if not self.api_key:
-            logger.warning("GEMINI_API_KEY environment variable is not set. GeminiParser calls will fail.")
+            logger.warning(
+                "GEMINI_API_KEY environment variable is not set. GeminiParser calls will fail."
+            )
 
     def parse(self, query: str) -> IntermediateRepresentation:
         if not self.api_key:
@@ -188,21 +211,17 @@ class GeminiParser(BaseParser):
         )
 
         data = {
-            "contents": [{
-                "parts": [
-                    {"text": f"System prompt: {system_instruction}\nUser Query: {query}"}
-                ]
-            }],
-            "generationConfig": {
-                "responseMimeType": "application/json"
-            }
+            "contents": [
+                {"parts": [{"text": f"System prompt: {system_instruction}\nUser Query: {query}"}]}
+            ],
+            "generationConfig": {"responseMimeType": "application/json"},
         }
 
         req = urllib.request.Request(
             url,
             data=json.dumps(data).encode("utf-8"),
             headers={"Content-Type": "application/json"},
-            method="POST"
+            method="POST",
         )
 
         try:
@@ -225,8 +244,12 @@ class GeminiParser(BaseParser):
                         backend="gemini",
                     )
                     ir.add_filter(
-                        field_name=k, operator=op, value=val, value_hi=val_hi,
-                        confidence=conf, provenance="Gemini API",
+                        field_name=k,
+                        operator=op,
+                        value=val,
+                        value_hi=val_hi,
+                        confidence=conf,
+                        provenance="Gemini API",
                     )
             else:
                 op, val, val_hi = split_operator_value(v)
@@ -236,7 +259,11 @@ class GeminiParser(BaseParser):
                     backend="gemini",
                 )
                 ir.add_filter(
-                    field_name=k, operator=op, value=val, value_hi=val_hi,
-                    confidence=conf, provenance="Gemini API",
+                    field_name=k,
+                    operator=op,
+                    value=val,
+                    value_hi=val_hi,
+                    confidence=conf,
+                    provenance="Gemini API",
                 )
         return ir

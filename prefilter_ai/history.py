@@ -13,14 +13,13 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import Any
 
-from prefilter_ai.ir import IntermediateRepresentation, IRFilterConstraint
-from prefilter_ai.parser_interface import BaseParser
+from prefilter_ai.ir import IntermediateRepresentation
 from prefilter_ai.ontology import OntologyEngine
-from prefilter_ai.validator import ConflictDetector
-from prefilter_ai.relaxer import QueryRelaxer
+from prefilter_ai.parser_interface import BaseParser
 from prefilter_ai.registry import SchemaRegistry
+from prefilter_ai.relaxer import QueryRelaxer
+from prefilter_ai.validator import ConflictDetector
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,7 @@ class QueryDiffEngine:
     ) -> IntermediateRepresentation:
         """
         Merge refinement constraints into the base IR state.
-        
+
         Handles:
           - Overwriting matching fields (e.g., "Actually Lenovo" overrides "Dell")
           - Appending array filters (e.g., "Exclude black" + "Exclude pink")
@@ -47,7 +46,7 @@ class QueryDiffEngine:
 
         # If refinement says "cheaper", let's adjust price ceil
         ref_text = refinement_ir.metadata.get("query_text", "").lower()
-        
+
         # Track which explicit filters are overwritten
         overwritten_fields = set()
 
@@ -59,18 +58,24 @@ class QueryDiffEngine:
             # If brand/make changes, overwrite the old one
             if field in {"brand", "make", "model", "product", "job_title", "city"}:
                 # Remove any existing eq filters for this field
-                merged.filters = [f for f in merged.filters if not (f.field == field and f.operator == "eq")]
+                merged.filters = [
+                    f for f in merged.filters if not (f.field == field and f.operator == "eq")
+                ]
                 overwritten_fields.add(field)
 
             # Handle price/budget relaxation/tightening
             if field == "price" and op in {"lt", "lte"}:
                 # If we already have a price filter, let's keep the lowest ceiling
-                existing_prices = [f for f in merged.filters if f.field == "price" and f.operator in {"lt", "lte"}]
+                existing_prices = [
+                    f for f in merged.filters if f.field == "price" and f.operator in {"lt", "lte"}
+                ]
                 if existing_prices:
                     min_ceiling = min(float(existing_prices[0].value), float(val))
                     # Remove old price filters
                     merged.filters = [f for f in merged.filters if not (f.field == "price")]
-                    merged.add_filter("price", "lt", min_ceiling, provenance=f"Refined (min ceiling)")
+                    merged.add_filter(
+                        "price", "lt", min_ceiling, provenance="Refined (min ceiling)"
+                    )
                     continue
 
             # Standard append or merge
@@ -103,7 +108,9 @@ class QueryDiffEngine:
 
     def _apply_cheaper_heuristic(self, ir: IntermediateRepresentation) -> None:
         """Heuristically reduce price ceiling by 20% if 'cheaper' is requested."""
-        price_filters = [f for f in ir.filters if f.field == "price" and f.operator in {"lt", "lte"}]
+        price_filters = [
+            f for f in ir.filters if f.field == "price" and f.operator in {"lt", "lte"}
+        ]
         if price_filters:
             f = price_filters[0]
             try:

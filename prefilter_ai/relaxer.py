@@ -10,8 +10,9 @@ directly rather than removing arbitrary low-priority constraints.
 from __future__ import annotations
 
 import copy
+
 from prefilter_ai.ir import IntermediateRepresentation, IRFilterConstraint
-from prefilter_ai.registry import SchemaRegistry, Importance
+from prefilter_ai.registry import Importance, SchemaRegistry
 
 
 class QueryRelaxer:
@@ -24,9 +25,7 @@ class QueryRelaxer:
     # Conflict-aware relaxation (primary method — fixes Gap #5)
     # ------------------------------------------------------------------
 
-    def relax_from_conflicts(
-        self, ir: IntermediateRepresentation
-    ) -> IntermediateRepresentation:
+    def relax_from_conflicts(self, ir: IntermediateRepresentation) -> IntermediateRepresentation:
         """
         Targeted relaxation driven by conflict detector tags.
 
@@ -55,9 +54,7 @@ class QueryRelaxer:
         for tag in conflict_tags:
             conflicting = tag.get("conflicting_fields", [])
             # Sort by importance ascending — relax least important first
-            conflicting_sorted = sorted(
-                conflicting, key=lambda f: _field_importance(f).value
-            )
+            conflicting_sorted = sorted(conflicting, key=lambda f: _field_importance(f).value)
 
             for field in conflicting_sorted:
                 filters_for_field = [f for f in relaxed_ir.filters if f.field == field]
@@ -83,9 +80,7 @@ class QueryRelaxer:
                 elif field in {"stars", "cabin_class", "experience_years"}:
                     imp = _field_importance(field)
                     if imp in {Importance.LOW, Importance.MEDIUM}:
-                        relaxed_ir.filters = [
-                            f for f in relaxed_ir.filters if f.field != field
-                        ]
+                        relaxed_ir.filters = [f for f in relaxed_ir.filters if f.field != field]
                         relaxed_ir.warnings.append(
                             f"Conflict relaxation: removed '{field}' constraint to resolve feasibility issue"
                         )

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── Operator splitting ─────────────────────────────────────────────────
 
 
@@ -139,8 +138,7 @@ def build_explanation(ir: Any) -> dict[str, str]:
         prov = f.provenance
         op_str = _op_to_english(f.operator, f.value, f.value_hi)
         explanations[f.field] = (
-            f"'{f.field}' {op_str} — extracted via {prov} "
-            f"(confidence: {f.confidence:.0%})"
+            f"'{f.field}' {op_str} — extracted via {prov} (confidence: {f.confidence:.0%})"
         )
     for p in ir.preferences:
         explanations[f"pref:{p.field}"] = (
@@ -152,13 +150,13 @@ def build_explanation(ir: Any) -> dict[str, str]:
 
 def _op_to_english(op: str, value: Any, value_hi: Any | None) -> str:
     mapping = {
-        "lt":  f"must be less than {value}",
+        "lt": f"must be less than {value}",
         "lte": f"must be at most {value}",
-        "gt":  f"must be greater than {value}",
+        "gt": f"must be greater than {value}",
         "gte": f"must be at least {value}",
         "approx": f"approximately {value}",
-        "ne":  f"must NOT be '{value}'",
-        "eq":  f"= '{value}'",
+        "ne": f"must NOT be '{value}'",
+        "eq": f"= '{value}'",
         "between": f"between {value} and {value_hi}",
     }
     return mapping.get(op, f"{op}: {value}")

@@ -83,6 +83,7 @@ class ParseResult:
 
     def _get_or_create_ir(self) -> Any:
         from prefilter_ai.ir import IntermediateRepresentation
+
         if self._ir is not None:
             return self._ir
 
@@ -104,6 +105,7 @@ class ParseResult:
 
     def _split_legacy_operator(self, value: Any) -> tuple[str, Any, Any | None]:
         import re
+
         if not isinstance(value, str):
             return "eq", value, None
 
@@ -132,24 +134,28 @@ class ParseResult:
         Convert the fields into a SQL WHERE clause and parameter dictionary.
         """
         from prefilter_ai.translators.sql import SQLTranslator
+
         ir = self._get_or_create_ir()
         return SQLTranslator(table_name=table_name).translate(ir)
 
     def to_mongodb(self) -> dict[str, Any]:
         """Convert the fields into a MongoDB filter dictionary."""
         from prefilter_ai.translators.mongodb import MongoDBTranslator
+
         ir = self._get_or_create_ir()
         return MongoDBTranslator().translate(ir)
 
     def to_chromadb(self) -> dict[str, Any]:
         """Convert the fields into a ChromaDB where query dictionary."""
         from prefilter_ai.translators.chromadb import ChromaDBTranslator
+
         ir = self._get_or_create_ir()
         return ChromaDBTranslator().translate(ir)
 
     def to_elasticsearch(self) -> dict[str, Any]:
         """Convert the fields into an Elasticsearch query DSL."""
         from prefilter_ai.translators.elasticsearch import ElasticsearchTranslator
+
         ir = self._get_or_create_ir()
         return ElasticsearchTranslator().translate(ir)
 
@@ -163,10 +169,10 @@ class ParseResult:
             Instance of SQLConnector, MongoConnector, ElasticsearchConnector, or ChromaDBConnector.
         """
         from prefilter_ai.connectors import (
-            SQLConnector,
-            MongoConnector,
-            ElasticsearchConnector,
             ChromaDBConnector,
+            ElasticsearchConnector,
+            MongoConnector,
+            SQLConnector,
         )
 
         if isinstance(connector, SQLConnector):

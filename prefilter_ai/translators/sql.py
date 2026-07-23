@@ -5,6 +5,7 @@ sql.py — SQL Query Translator for Prefilter AI.
 from __future__ import annotations
 
 from typing import Any
+
 from prefilter_ai.ir import IntermediateRepresentation
 from prefilter_ai.translators.base import BaseTranslator
 
@@ -18,7 +19,7 @@ class SQLTranslator(BaseTranslator):
     def translate(self, ir: IntermediateRepresentation) -> tuple[str, dict[str, Any]]:
         """
         Translates IR to parameterised SQL.
-        
+
         Returns:
             (sql_string, param_dict)
         """

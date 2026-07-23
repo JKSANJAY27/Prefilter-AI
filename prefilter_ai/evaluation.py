@@ -10,9 +10,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
 from prefilter_ai.expert import PrefilterAI
-from prefilter_ai.validator import ConflictDetector
 from prefilter_ai.relaxer import QueryRelaxer
+from prefilter_ai.validator import ConflictDetector
 
 
 @dataclass
@@ -44,10 +45,12 @@ class EvaluationHarness:
         self.detector = ConflictDetector()
         self.relaxer = QueryRelaxer()
 
-    def evaluate_item(self, query: str, ground_truth: dict[str, Any], relax_level: int = 0) -> EvalResult:
+    def evaluate_item(
+        self, query: str, ground_truth: dict[str, Any], relax_level: int = 0
+    ) -> EvalResult:
         """Run parser, ontology, validation, and optionally relaxation metrics on a single query."""
         latency = LatencyProfile()
-        
+
         # 1. Measure Extraction
         start = time.perf_counter()
         result = self.expert.parse(query)
@@ -60,6 +63,7 @@ class EvaluationHarness:
         # but let's time the direct inference path)
         start_ont = time.perf_counter()
         from prefilter_ai.ontology import OntologyEngine
+
         ir = OntologyEngine().infer(ir, query)
         latency.ontology_ms = (time.perf_counter() - start_ont) * 1000
 
@@ -78,7 +82,7 @@ class EvaluationHarness:
 
         # Calculate metrics (precision/recall of fields)
         extracted = result.fields
-        
+
         # Compare ground truth keys/values (exclude domain)
         gt_filtered = {k: v for k, v in ground_truth.items() if k != "domain"}
         ext_filtered = {k: v for k, v in extracted.items() if k != "domain"}
@@ -104,7 +108,9 @@ class EvaluationHarness:
             relaxed_steps_logged=relaxed_logs,
         )
 
-    def evaluate_dataset(self, dataset: list[dict[str, Any]], relax_level: int = 0) -> dict[str, Any]:
+    def evaluate_dataset(
+        self, dataset: list[dict[str, Any]], relax_level: int = 0
+    ) -> dict[str, Any]:
         """Run evaluation across a list of test records."""
         results = []
         total_p = 0.0
@@ -118,7 +124,7 @@ class EvaluationHarness:
             gt = item["ground_truth"]
             res = self.evaluate_item(query, gt, relax_level=relax_level)
             results.append(res)
-            
+
             total_p += res.precision
             total_r += res.recall
             total_f1 += res.f1
@@ -141,5 +147,5 @@ class EvaluationHarness:
     def _match_value(self, ext_val: Any, gt_val: Any) -> bool:
         """Compare string/list values case-insensitively."""
         if isinstance(ext_val, list) and isinstance(gt_val, list):
-            return set(str(x).lower() for x in ext_val) == set(str(y).lower() for y in gt_val)
+            return {str(x).lower() for x in ext_val} == {str(y).lower() for y in gt_val}
         return str(ext_val).lower() == str(gt_val).lower()

@@ -192,10 +192,10 @@ class TestParseResult:
                 "brand": "Sony",
                 "price": "lt:200",
                 "color": ["ne:red", "ne:green"],
-                "rating": "between:4.0:5.0"
+                "rating": "between:4.0:5.0",
             },
             raw_output="",
-            model_format="json"
+            model_format="json",
         )
         # Test SQL
         sql, params = result.to_sql("products")
@@ -222,27 +222,28 @@ class TestParseResult:
 
 class TestMiddlewarePipeline:
     def test_registry(self):
-        from prefilter_ai.registry import SchemaRegistry, DataType, Importance
+        from prefilter_ai.registry import DataType, Importance, SchemaRegistry
+
         reg = SchemaRegistry()
         assert "ecommerce" in reg.list_domains()
-        
+
         schema = reg.get("ecommerce")
         assert schema is not None
         assert schema.fields["price"].data_type == DataType.NUMBER
         assert schema.fields["price"].importance == Importance.HIGH
 
     def test_ontology(self):
-        from prefilter_ai.ontology import OntologyEngine
         from prefilter_ai.ir import IntermediateRepresentation
-        
+        from prefilter_ai.ontology import OntologyEngine
+
         ir = IntermediateRepresentation(domain="ecommerce")
         ir = OntologyEngine().infer(ir, "laptop for AI and coding")
-        
+
         # Check inferred filters
         feature_filters = [f for f in ir.filters if f.field == "feature"]
         assert len(feature_filters) > 0
         assert feature_filters[0].value == "CUDA/RTX GPU"
-        
+
         # Check inferred preferences
         ram_prefs = [p for p in ir.preferences if p.field == "ram"]
         assert len(ram_prefs) > 0
@@ -250,11 +251,11 @@ class TestMiddlewarePipeline:
         assert "AI" in ram_prefs[0].provenance  # provenance mentions 'AI' keyword
 
     def test_conflict_detection(self):
-        from prefilter_ai.validator import ConflictDetector
         from prefilter_ai.ir import IntermediateRepresentation
-        
+        from prefilter_ai.validator import ConflictDetector
+
         detector = ConflictDetector()
-        
+
         # Case A: Mathematical pricing contradiction
         ir = IntermediateRepresentation()
         ir.add_filter("price", "lt", 100)
@@ -272,37 +273,37 @@ class TestMiddlewarePipeline:
         assert "Feasibility conflict" in ir_laptop.conflicts[0]
 
     def test_query_relaxation(self):
-        from prefilter_ai.relaxer import QueryRelaxer
         from prefilter_ai.ir import IntermediateRepresentation
-        
+        from prefilter_ai.relaxer import QueryRelaxer
+
         relaxer = QueryRelaxer()
         ir = IntermediateRepresentation(domain="ecommerce")
         ir.add_filter("brand", "eq", "Sony")
         ir.add_filter("price", "lt", 200)
-        ir.add_filter("color", "ne", "black") # LOW importance
-        
+        ir.add_filter("color", "ne", "black")  # LOW importance
+
         # Level 1 should drop color
         relaxed_1 = relaxer.relax(ir, relaxation_level=1)
         assert len(relaxed_1.filters) == 2
         assert not any(f.field == "color" for f in relaxed_1.filters)
-        
+
         # Level 2 should drop color + expand price ceiling
         relaxed_2 = relaxer.relax(ir, relaxation_level=2)
-        price_f = [f for f in relaxed_2.filters if f.field == "price"][0]
-        assert price_f.value == 250.0 # 200 * 1.25
+        price_f = next(f for f in relaxed_2.filters if f.field == "price")
+        assert price_f.value == 250.0  # 200 * 1.25
 
     def test_stateful_session_and_diff(self):
-        from prefilter_ai.history import PrefilterSession
         from prefilter_ai.expert import PrefilterAI
-        
+        from prefilter_ai.history import PrefilterSession
+
         expert = PrefilterAI(parse_backend="spacy")
         session = PrefilterSession(parser=expert.parser)
-        
+
         # Turn 1
         ir = session.process_query("Sony headphones under $200")
         assert any(f.field == "brand" and f.value == "Sony" for f in ir.filters)
         assert any(f.field == "price" and f.value == 200.0 for f in ir.filters)
-        
+
         # Turn 2: refinement query
         ir_ref = session.process_query("Actually Apple headphones")
         # Should override brand Sony to Apple
@@ -313,21 +314,18 @@ class TestMiddlewarePipeline:
 
         # Turn 3: "cheaper" refinement
         ir_cheap = session.process_query("make it cheaper")
-        price_val = [f.value for f in ir_cheap.filters if f.field == "price"][0]
-        assert price_val == 160.0 # 200 * 0.80
+        price_val = next(f.value for f in ir_cheap.filters if f.field == "price")
+        assert price_val == 160.0  # 200 * 0.80
 
     def test_evaluation_harness(self):
         from prefilter_ai.evaluation import EvaluationHarness
+
         harness = EvaluationHarness()
-        
+
         dataset = [
             {
                 "query": "Sony headphones under $200",
-                "ground_truth": {
-                    "domain": "ecommerce",
-                    "brand": "Sony",
-                    "price": "lt:200"
-                }
+                "ground_truth": {"domain": "ecommerce", "brand": "Sony", "price": "lt:200"},
             }
         ]
         summary = harness.evaluate_dataset(dataset)
@@ -335,15 +333,12 @@ class TestMiddlewarePipeline:
         assert summary["metrics"]["avg_latency_ms"] > 0.0
 
 
-
 # ── Integration test (skipped in CI without GPU) ───────────────
 
 SKIP_MODEL = not os.environ.get("PREFILTER_AI_RUN_MODEL_TESTS")
 
 
-@pytest.mark.skipif(
-    SKIP_MODEL, reason="Set PREFILTER_AI_RUN_MODEL_TESTS=1 to run model tests"
-)
+@pytest.mark.skipif(SKIP_MODEL, reason="Set PREFILTER_AI_RUN_MODEL_TESTS=1 to run model tests")
 class TestPrefilterAIIntegration:
     @pytest.fixture(scope="class")
     def expert_json(self):

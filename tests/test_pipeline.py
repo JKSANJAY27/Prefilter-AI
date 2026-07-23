@@ -7,12 +7,13 @@ adapter wiring path.
 """
 
 from __future__ import annotations
+
 import pytest
 
-from prefilter_ai import PrefilterPipeline, PipelineResult
-
+from prefilter_ai import PipelineResult, PrefilterPipeline
 
 # ── Fixture ────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def pipeline():
@@ -20,6 +21,7 @@ def pipeline():
 
 
 # ── Basic pipeline execution ───────────────────────────────────────────
+
 
 def test_pipeline_runs(pipeline):
     r = pipeline.run("Sony headphones under $200")
@@ -63,12 +65,18 @@ def test_pipeline_repr(pipeline):
 
 # ── Ontology inference ─────────────────────────────────────────────────
 
+
 def test_ontology_infers_gpu_for_gaming(pipeline):
     r = pipeline.run("gaming laptop")
     prefs = {p.field: p.value for p in r.ir.preferences}
     # Gaming should trigger GPU preference via ontology
     filter_vals = {f.field: f.value for f in r.ir.filters}
-    has_gpu = "feature" in filter_vals or "feature" in prefs or "gpu" in str(prefs).lower() or "gpu" in str(filter_vals).lower()
+    has_gpu = (
+        "feature" in filter_vals
+        or "feature" in prefs
+        or "gpu" in str(prefs).lower()
+        or "gpu" in str(filter_vals).lower()
+    )
     assert has_gpu, f"Expected GPU preference. Prefs: {prefs}, Filters: {filter_vals}"
 
 
@@ -76,10 +84,9 @@ def test_ontology_infers_for_ai_laptop(pipeline):
     r = pipeline.run("laptop for AI and machine learning")
     prefs = {p.field: p.value for p in r.ir.preferences}
     filter_vals = {f.field: f.value for f in r.ir.filters}
-    has_indicator = (
-        any("ram" in k.lower() or "gpu" in k.lower() or "vram" in k.lower() for k in prefs.keys())
-        or any("gpu" in str(v).lower() or "cuda" in str(v).lower() for v in filter_vals.values())
-    )
+    has_indicator = any(
+        "ram" in k.lower() or "gpu" in k.lower() or "vram" in k.lower() for k in prefs.keys()
+    ) or any("gpu" in str(v).lower() or "cuda" in str(v).lower() for v in filter_vals.values())
     assert has_indicator, f"Expected AI-related inference. Got prefs={prefs}"
 
 
@@ -87,17 +94,22 @@ def test_ontology_infers_honeymoon_preferences(pipeline):
     r = pipeline.run("hotel for honeymoon in Maldives")
     prefs = {p.field: p.value for p in r.ir.preferences}
     keys = list(prefs.keys())
-    assert any(k in {"view", "room_type", "amenities"} for k in keys), f"Expected honeymoon prefs, got: {keys}"
+    assert any(k in {"view", "room_type", "amenities"} for k in keys), (
+        f"Expected honeymoon prefs, got: {keys}"
+    )
 
 
 def test_ontology_infers_remote_job(pipeline):
     r = pipeline.run("remote senior data scientist job")
     filter_vals = {f.field: f.value for f in r.ir.filters}
-    has_remote = filter_vals.get("remote") is True or filter_vals.get("experience_level") == "senior"
+    has_remote = (
+        filter_vals.get("remote") is True or filter_vals.get("experience_level") == "senior"
+    )
     assert has_remote, f"Expected remote or senior filter. Got: {filter_vals}"
 
 
 # ── Conflict detection ─────────────────────────────────────────────────
+
 
 def test_conflict_detected_gaming_laptop_cheap(pipeline):
     r = pipeline.run("gaming laptop under $500")
@@ -122,6 +134,7 @@ def test_no_conflict_reasonable_budget(pipeline):
 
 # ── Conflict-aware relaxation ──────────────────────────────────────────
 
+
 def test_relaxation_triggered_on_conflict(pipeline):
     r = pipeline.run("gaming laptop under $500")
     assert r.relaxed_ir is not None, "Expected relaxed_ir when conflicts detected"
@@ -132,10 +145,15 @@ def test_relaxation_expands_price_not_product(pipeline):
     if r.relaxed_ir is None:
         pytest.skip("No relaxation triggered")
     relaxed_price = next(
-        (f.value for f in r.relaxed_ir.filters if f.field == "price" and f.operator in {"lt","lte"}), None
+        (
+            f.value
+            for f in r.relaxed_ir.filters
+            if f.field == "price" and f.operator in {"lt", "lte"}
+        ),
+        None,
     )
     original_price = next(
-        (f.value for f in r.ir.filters if f.field == "price" and f.operator in {"lt","lte"}), None
+        (f.value for f in r.ir.filters if f.field == "price" and f.operator in {"lt", "lte"}), None
     )
     if relaxed_price is not None and original_price is not None:
         assert float(relaxed_price) >= float(original_price), (
@@ -151,6 +169,7 @@ def test_no_relaxation_without_conflict(pipeline):
 
 
 # ── Translators ────────────────────────────────────────────────────────
+
 
 def test_sql_translation(pipeline):
     r = pipeline.run("headphones under $200")
@@ -179,6 +198,7 @@ def test_chromadb_translation(pipeline):
 
 # ── Explanation ────────────────────────────────────────────────────────
 
+
 def test_explanation_produced(pipeline):
     r = pipeline.run("Sony headphones under $200")
     assert isinstance(r.explanation, dict)
@@ -195,9 +215,10 @@ def test_explanation_has_provenance(pipeline):
 
 # ── Multi-turn session ─────────────────────────────────────────────────
 
+
 def test_session_basic(pipeline):
     session = pipeline.new_session()
-    r1 = session.run("gaming laptops")
+    session.run("gaming laptops")
     r2 = session.run("Only Lenovo")
     assert r2.ir is not None
     assert len(session.history) == 2
@@ -210,10 +231,9 @@ def test_session_reruns_ontology_on_refinement(pipeline):
     # GPU preference should be inferred from turn 1
     prefs_t1 = {p.field: p.value for p in r1.ir.preferences}
     filter_t1 = {f.field: f.value for f in r1.ir.filters}
-    has_indicator = (
-        any("gpu" in str(v).lower() or "feature" in k.lower() for k, v in prefs_t1.items())
-        or any("gpu" in str(v).lower() or "cuda" in str(v).lower() for v in filter_t1.values())
-    )
+    has_indicator = any(
+        "gpu" in str(v).lower() or "feature" in k.lower() for k, v in prefs_t1.items()
+    ) or any("gpu" in str(v).lower() or "cuda" in str(v).lower() for v in filter_t1.values())
     assert has_indicator, f"Expected GPU inference in turn 1. Prefs={prefs_t1}, Filters={filter_t1}"
 
 
@@ -227,8 +247,10 @@ def test_session_reset(pipeline):
 
 # ── to_dict serialization ──────────────────────────────────────────────
 
+
 def test_to_dict_serializable(pipeline):
     import json
+
     r = pipeline.run("headphones under $200")
     d = r.to_dict()
     # Should be JSON-serializable
@@ -245,21 +267,24 @@ def test_to_dict_contains_keys(pipeline):
 
 # ── Domain coverage ────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("query,expected_domain", [
-    ("nonstop flight from JFK to Tokyo", "flights"),
-    ("5-star hotel in Paris", "hotels"),
-    ("2 bedroom apartment in Manhattan", "real_estate"),
-    ("Python machine learning course for beginners", "courses"),
-    ("Toyota Camry under 50000 miles", "cars"),
-    ("vegan restaurant open late near me", "restaurants"),
-    ("action movies with rating above 8", "movies"),
-    ("dermatologist accepting Blue Cross insurance", "healthcare"),
-    ("senior software engineer remote job at startup", "jobs"),
-    ("gaming laptop under $1200", "ecommerce"),
-])
+
+@pytest.mark.parametrize(
+    "query,expected_domain",
+    [
+        ("nonstop flight from JFK to Tokyo", "flights"),
+        ("5-star hotel in Paris", "hotels"),
+        ("2 bedroom apartment in Manhattan", "real_estate"),
+        ("Python machine learning course for beginners", "courses"),
+        ("Toyota Camry under 50000 miles", "cars"),
+        ("vegan restaurant open late near me", "restaurants"),
+        ("action movies with rating above 8", "movies"),
+        ("dermatologist accepting Blue Cross insurance", "healthcare"),
+        ("senior software engineer remote job at startup", "jobs"),
+        ("gaming laptop under $1200", "ecommerce"),
+    ],
+)
 def test_domain_detection(pipeline, query, expected_domain):
     r = pipeline.run(query)
     assert r.ir.domain == expected_domain, (
-        f"Expected domain '{expected_domain}' for query '{query}', "
-        f"got '{r.ir.domain}'"
+        f"Expected domain '{expected_domain}' for query '{query}', got '{r.ir.domain}'"
     )

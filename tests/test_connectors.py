@@ -6,14 +6,15 @@ from __future__ import annotations
 
 import sqlite3
 from unittest.mock import MagicMock
+
 import pytest
 
 from prefilter_ai import PrefilterPipeline
 from prefilter_ai.connectors import (
-    SQLConnector,
-    MongoConnector,
-    ElasticsearchConnector,
     ChromaDBConnector,
+    ElasticsearchConnector,
+    MongoConnector,
+    SQLConnector,
 )
 
 

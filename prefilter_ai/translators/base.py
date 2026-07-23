@@ -16,4 +16,3 @@ class BaseTranslator(ABC):
     @abstractmethod
     def translate(self, ir: IntermediateRepresentation) -> Any:
         """Translate IntermediateRepresentation to database specific queries."""
-        pass

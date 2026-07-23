@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 from prefilter_ai.connectors.base import BaseConnector
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,9 @@ class SQLConnector(BaseConnector):
         self.connection = connection
         self.table_name = table_name
 
-    def execute(self, query_payload: tuple[str, dict[str, Any]] | str, **kwargs: Any) -> list[dict[str, Any]]:
+    def execute(
+        self, query_payload: tuple[str, dict[str, Any]] | str, **kwargs: Any
+    ) -> list[dict[str, Any]]:
         """
         Execute SQL query payload.
 
@@ -62,16 +65,19 @@ class SQLConnector(BaseConnector):
         if hasattr(self.connection, "execute") and hasattr(self.connection, "connect"):
             with self.connection.connect() as conn:
                 from sqlalchemy import text
+
                 result = conn.execute(text(sql), params)
                 keys = result.keys()
-                return [dict(zip(keys, row)) for row in result.fetchall()]
+                return [dict(zip(keys, row, strict=False)) for row in result.fetchall()]
         elif hasattr(self.connection, "execute"):
             # Direct connection object
-            cursor = self.connection.cursor() if hasattr(self.connection, "cursor") else self.connection
+            cursor = (
+                self.connection.cursor() if hasattr(self.connection, "cursor") else self.connection
+            )
             cursor.execute(sql, params)
             if hasattr(cursor, "description") and cursor.description:
                 cols = [desc[0] for desc in cursor.description]
-                return [dict(zip(cols, row)) for row in cursor.fetchall()]
+                return [dict(zip(cols, row, strict=False)) for row in cursor.fetchall()]
             return cursor.fetchall()
         else:
             raise ValueError(f"Unsupported SQL connection object: {type(self.connection)}")

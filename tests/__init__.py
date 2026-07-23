@@ -195,10 +195,10 @@ class TestParseResult:
                 "brand": "Sony",
                 "price": "lt:200",
                 "color": ["ne:red", "ne:green"],
-                "rating": "between:4.0:5.0"
+                "rating": "between:4.0:5.0",
             },
             raw_output="",
-            model_format="json"
+            model_format="json",
         )
         # Test SQL
         sql, params = result.to_sql("products")
@@ -224,9 +224,7 @@ class TestParseResult:
 SKIP_MODEL = not os.environ.get("PREFILTER_AI_RUN_MODEL_TESTS")
 
 
-@pytest.mark.skipif(
-    SKIP_MODEL, reason="Set PREFILTER_AI_RUN_MODEL_TESTS=1 to run model tests"
-)
+@pytest.mark.skipif(SKIP_MODEL, reason="Set PREFILTER_AI_RUN_MODEL_TESTS=1 to run model tests")
 class TestPrefilterAIIntegration:
     @pytest.fixture(scope="class")
     def expert_json(self):
@@ -267,4 +265,3 @@ class TestPrefilterAIIntegration:
         results = expert_json.parse_batch(queries)
         assert len(results) == 2
         assert all(isinstance(r, ParseResult) for r in results)
-
