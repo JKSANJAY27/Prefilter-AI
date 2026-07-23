@@ -47,6 +47,8 @@ def _try_peft(model_id: str, load_in_4bit: bool) -> tuple[Any, Any]:
     from transformers import AutoTokenizer
 
     quant_kwargs: dict[str, Any] = {}
+    device_map = "auto" if torch.cuda.is_available() else None
+
     if load_in_4bit and torch.cuda.is_available():
         try:
             from transformers import BitsAndBytesConfig
@@ -62,7 +64,7 @@ def _try_peft(model_id: str, load_in_4bit: bool) -> tuple[Any, Any]:
 
     model = AutoPeftModelForCausalLM.from_pretrained(
         model_id,
-        device_map="auto",
+        device_map=device_map,
         **quant_kwargs,
     )
     model.eval()
@@ -75,14 +77,17 @@ def _try_plain(model_id: str) -> tuple[Any, Any]:
     Last-resort: load base model only (no LoRA adapter).
     Results will be worse than the fine-tuned adapters.
     """
+    import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
+    device_map = "auto" if torch.cuda.is_available() else None
+
     logger.warning(
-        "Loading base model without LoRA adapter (peft not installed). "
+        "Loading base model without LoRA adapter (peft failed or not installed). "
         "Output quality will be lower than the fine-tuned model."
     )
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID)
-    model = AutoModelForCausalLM.from_pretrained(BASE_MODEL_ID, device_map="auto")
+    model = AutoModelForCausalLM.from_pretrained(BASE_MODEL_ID, device_map=device_map)
     model.eval()
     return model, tokenizer
 
