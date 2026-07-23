@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prefilter AI — Query Understanding Platform</title>
+  <meta name="description" content="AI-powered Query Understanding Middleware. Parse, validate, relax and translate natural language search queries in real-time." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-dot"></span>
+        <span class="logo-text">Prefilter <span class="logo-accent">AI</span></span>
+        <span class="logo-badge">Platform v0.2</span>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" id="nav-pipeline" onclick="showView('pipeline')">Pipeline</button>
+        <button class="nav-btn" id="nav-session" onclick="showView('session')">Session</button>
+        <button class="nav-btn" id="nav-analytics" onclick="showView('analytics'); loadAnalytics()">Analytics</button>
+        <button class="nav-btn" id="nav-domains" onclick="showView('domains'); loadDomains()">Domains</button>
+      </nav>
+      <div class="header-right">
+        <div class="health-indicator" id="healthDot" title="API Status"></div>
+        <span class="health-text" id="healthText">Checking...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── PIPELINE VIEW ────────────────────────────────────────────── -->
+  <div id="view-pipeline" class="view active">
+    <div class="hero">
+      <h1 class="hero-title">Query Understanding <span class="gradient-text">Pipeline</span></h1>
+      <p class="hero-sub">Natural language → structured filters → backend DSL, in one call.</p>
+    </div>
+
+    <div class="main-grid">
+      <!-- Left: Input Panel -->
+      <div class="panel input-panel">
+        <div class="panel-header">
+          <span class="panel-title">Search Query</span>
+        </div>
+
+        <textarea id="queryInput" class="query-input" placeholder="e.g. gaming laptop under $800, 16GB RAM, not refurbished" rows="3"></textarea>
+
+        <div class="controls-row">
+          <div class="control-group">
+            <label class="control-label">Parser</label>
+            <select id="parserSelect" class="control-select">
+              <option value="spacy">spaCy (CPU, fast)</option>
+              <option value="gemini">Gemini API</option>
+              <option value="slm">SLM (fine-tuned)</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label class="control-label">Auto Relax</label>
+            <select id="relaxSelect" class="control-select">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="run-btn" id="runBtn" onclick="runPipeline()">
+          <span class="run-btn-icon">▶</span> Run Pipeline
+        </button>
+
+        <div class="scenario-list">
+          <div class="scenario-label">Quick scenarios</div>
+          <button class="scenario-chip conflict" onclick="setQuery('gaming laptop under $500')">⚡ Conflict: gaming laptop &lt;$500</button>
+          <button class="scenario-chip ontology" onclick="setQuery('laptop for AI and machine learning')">🧠 Ontology: AI laptop</button>
+          <button class="scenario-chip conflict" onclick="setQuery('5-star beachfront hotel under $80')">🏨 Conflict: luxury hotel &lt;$80</button>
+          <button class="scenario-chip ok" onclick="setQuery('nonstop flight from JFK to Tokyo under $3000')">✈️ Flight filters</button>
+          <button class="scenario-chip ok" onclick="setQuery('Sony noise cancelling headphones not red under $200 rated above 4 stars')">🎧 Multi-constraint ecommerce</button>
+          <button class="scenario-chip ontology" onclick="setQuery('hotel for honeymoon in Maldives')">🌊 Honeymoon hotel</button>
+          <button class="scenario-chip ok" onclick="setQuery('remote senior data scientist job at startup, salary above $130k')">💼 Senior job search</button>
+          <button class="scenario-chip conflict" onclick="setQuery('business class flight to London under $200')">✈️ Conflict: business class &lt;$200</button>
+        </div>
+      </div>
+
+      <!-- Right: Output Panel -->
+      <div class="panel output-panel">
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon">⚡</div>
+          <p>Run a query to see the full pipeline output</p>
+        </div>
+
+        <div id="outputContent" class="hidden">
+          <!-- Conflicts -->
+          <div id="conflictBanner" class="hidden conflict-banner">
+            <div class="conflict-icon">⚠</div>
+            <div class="conflict-body">
+              <div class="conflict-title">Feasibility Conflict Detected</div>
+              <div id="conflictMessages" class="conflict-messages"></div>
+            </div>
+          </div>
+
+          <!-- Stage pills -->
+          <div class="stage-bar">
+            <div class="stage-pill" id="sp-parse"><span class="stage-num">1</span> Parse</div>
+            <div class="stage-arrow">→</div>
+            <div class="stage-pill" id="sp-ontology"><span class="stage-num">2</span> Ontology</div>
+            <div class="stage-arrow">→</div>
+            <div class="stage-pill" id="sp-validate"><span class="stage-num">3</span> Validate</div>
+            <div class="stage-arrow">→</div>
+            <div class="stage-pill" id="sp-relax"><span class="stage-num">4</span> Relax</div>
+            <div class="stage-arrow">→</div>
+            <div class="stage-pill" id="sp-translate"><span class="stage-num">5</span> Translate</div>
+          </div>
+
+          <!-- Meta row -->
+          <div class="meta-row">
+            <div class="meta-chip domain-chip" id="domainChip"></div>
+            <div class="meta-chip" id="filterCount"></div>
+            <div class="meta-chip" id="prefCount"></div>
+            <div class="meta-chip latency-chip" id="latencyChip"></div>
+          </div>
+
+          <!-- Output tabs -->
+          <div class="tabs">
+            <button class="tab active" onclick="showTab('ir')">IR</button>
+            <button class="tab" onclick="showTab('sql')">SQL</button>
+            <button class="tab" onclick="showTab('mongodb')">MongoDB</button>
+            <button class="tab" onclick="showTab('elasticsearch')">Elasticsearch</button>
+            <button class="tab" onclick="showTab('chromadb')">ChromaDB</button>
+            <button class="tab" onclick="showTab('explain')">Explanation</button>
+            <button class="tab" onclick="showTab('relaxed')">Relaxed IR</button>
+          </div>
+
+          <div id="tab-ir" class="tab-content active">
+            <pre id="irOutput" class="code-block"></pre>
+          </div>
+          <div id="tab-sql" class="tab-content hidden">
+            <pre id="sqlOutput" class="code-block"></pre>
+          </div>
+          <div id="tab-mongodb" class="tab-content hidden">
+            <pre id="mongoOutput" class="code-block"></pre>
+          </div>
+          <div id="tab-elasticsearch" class="tab-content hidden">
+            <pre id="esOutput" class="code-block"></pre>
+          </div>
+          <div id="tab-chromadb" class="tab-content hidden">
+            <pre id="chromaOutput" class="code-block"></pre>
+          </div>
+          <div id="tab-explain" class="tab-content hidden">
+            <div id="explainOutput" class="explain-list"></div>
+          </div>
+          <div id="tab-relaxed" class="tab-content hidden">
+            <pre id="relaxedOutput" class="code-block"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SESSION VIEW ──────────────────────────────────────────────── -->
+  <div id="view-session" class="view hidden">
+    <div class="hero">
+      <h1 class="hero-title">Conversational <span class="gradient-text">Session</span></h1>
+      <p class="hero-sub">Multi-turn search with stateful constraint merging and re-validation.</p>
+    </div>
+
+    <div class="session-layout">
+      <div class="session-panel">
+        <div class="session-meta">
+          <span class="session-id-label">Session ID: <code id="sessionIdDisplay"></code></span>
+          <button class="reset-btn" onclick="resetSession()">↺ Reset</button>
+        </div>
+
+        <div class="session-history" id="sessionHistory"></div>
+
+        <div class="session-input-row">
+          <input type="text" id="sessionInput" class="session-input" placeholder="Refine your search..." onkeydown="if(event.key==='Enter') sendSession()" />
+          <button class="send-btn" onclick="sendSession()">Send</button>
+        </div>
+
+        <div class="session-suggestions">
+          <div class="scenario-label">Try this conversation</div>
+          <button class="scenario-chip ok" onclick="sessionConv(0)">Start: Gaming laptops</button>
+          <button class="scenario-chip ok" onclick="sessionConv(1)">→ Only Lenovo</button>
+          <button class="scenario-chip ontology" onclick="sessionConv(2)">→ Actually 32GB RAM</button>
+          <button class="scenario-chip conflict" onclick="sessionConv(3)">→ Under $600</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ANALYTICS VIEW ───────────────────────────────────────────── -->
+  <div id="view-analytics" class="view hidden">
+    <div class="hero">
+      <h1 class="hero-title">Search <span class="gradient-text">Analytics</span></h1>
+      <p class="hero-sub">Runtime metrics across all pipeline executions in this session.</p>
+    </div>
+
+    <div class="analytics-grid" id="analyticsGrid">
+      <div class="analytics-card">
+        <div class="analytics-number" id="stat-total">—</div>
+        <div class="analytics-label">Total Queries</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-number" id="stat-conflict">—</div>
+        <div class="analytics-label">Conflict Rate</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-number" id="stat-relax">—</div>
+        <div class="analytics-label">Relaxation Rate</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-number" id="stat-latency">—</div>
+        <div class="analytics-label">Avg Latency</div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-number" id="stat-sessions">—</div>
+        <div class="analytics-label">Active Sessions</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:2rem;">
+      <div class="panel-header"><span class="panel-title">Domain Distribution</span></div>
+      <div id="domainDistribution" class="domain-dist"></div>
+    </div>
+  </div>
+
+  <!-- ── DOMAINS VIEW ─────────────────────────────────────────────── -->
+  <div id="view-domains" class="view hidden">
+    <div class="hero">
+      <h1 class="hero-title">Domain <span class="gradient-text">Registry</span></h1>
+      <p class="hero-sub">Registered schemas defining fields, types, and importance weights per domain.</p>
+    </div>
+    <div id="domainsGrid" class="domains-grid"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
